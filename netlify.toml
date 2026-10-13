@@ -1,0 +1,14 @@
+# Netlify: publica so o front-end (pasta client). O servidor (server) roda em outro host.
+[build]
+  base = "client"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# App de uma pagina so: qualquer rota abre o index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

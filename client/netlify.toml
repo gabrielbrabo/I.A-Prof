@@ -1,0 +1,12 @@
+# Configuracao do Netlify para o front (SPA com React Router)
+[build]
+  base = "client"
+  command = "npm run build"
+  publish = "dist"
+
+# Redireciona todas as rotas para o index.html (necessario para SPA).
+# Sem isso, recarregar em /perfil, /painel, etc. da 404.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
