@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>I.A Prof</title>
+    <script>
+      // Aplica o tema antes de desenhar a pagina (evita piscar claro)
+      try {
+        var t = localStorage.getItem("iaprof.tema");
+        if (t === "escuro" || (!t && window.matchMedia("(prefers-color-scheme: dark)").matches)) document.documentElement.classList.add("dark");
+      } catch (e) {}
+    </script>
+  </head>
+  <body class="bg-slate-50">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
