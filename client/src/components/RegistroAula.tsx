@@ -597,7 +597,7 @@ export default function RegistroAula({
             onChange={(e) => !nomeDev && mudar(setProfessorEdit as (v: string) => void, "professor")(e.target.value)}
           />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0" data-tour="serie">
           <label className="text-xs font-medium text-slate-500">Série</label>
           <select
             className={`${campo} ${!ano ? "border-amber-400 bg-amber-50" : ""}`}
@@ -672,7 +672,7 @@ export default function RegistroAula({
             <input type="date" className={campo} value={data} onChange={(e) => setData(e.target.value)} />
           </div>
         </div>
-        <div className="col-span-2 min-w-0 sm:col-span-1">
+        <div className="col-span-2 min-w-0 sm:col-span-1" data-tour="periodo">
           <label className="text-xs font-medium text-slate-500">Período *</label>
           <select
             className={`${campo} ${!periodo && periodosDisponiveis.length ? "border-amber-400 bg-amber-50" : ""}`}
@@ -732,8 +732,8 @@ export default function RegistroAula({
 
       {!carregandoPlano && !periodosDisponiveis.length && (
         <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Não há plano de curso do <b>{ANOS.find((a) => a.valor === ano)?.nome}</b> em <b>{anoLetivo}</b>. Cadastre o plano na aba{" "}
-          <b>Plano de curso</b> para gerar registros — as habilidades usadas vêm do plano do período.
+          Não há plano de curso do <b>{ANOS.find((a) => a.valor === ano)?.nome}</b> em <b>{anoLetivo}</b>. Cadastre o plano em{" "}
+          <b>Plano de aulas › Plano de curso</b> para gerar aulas — as habilidades usadas vêm do plano do período.
         </div>
       )}
       {!carregandoPlano && periodosDisponiveis.length > 0 && !periodo && (
@@ -751,7 +751,7 @@ export default function RegistroAula({
       {/* Entrada rapida */}
       <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
         {/* Tamanho do texto no diario: em destaque, antes de escrever */}
-        <div id="limite-diario" className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2.5">
+        <div id="limite-diario" data-tour="limite" className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2.5">
           <span className="text-sm font-semibold text-indigo-900">📏 Tamanho máximo do texto no diário</span>
           <span className="flex items-center gap-1.5">
             <input
@@ -790,6 +790,7 @@ export default function RegistroAula({
           componente e coloca os códigos.
         </p>
         <textarea
+          data-tour="texto"
           rows={3}
           className={campo}
           value={texto}
@@ -825,6 +826,7 @@ export default function RegistroAula({
                 ditado.ouvindo ? "bg-rose-600 text-white hover:bg-rose-700" : "bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50"
               }`}
               title="Ditar a aula por voz"
+              data-tour="falar"
             >
               {ditado.transcrevendo ? "⏳ Transcrevendo…" : ditado.ouvindo ? "⏹ Parar" : "🎤 Falar"}
             </button>
@@ -833,6 +835,7 @@ export default function RegistroAula({
             </span>
           </div>
           <button
+            data-tour="gerar"
             onClick={gerar}
             disabled={gerando || texto.trim().length < 3 || !periodo || ditado.transcrevendo || (ditado.ouvindo && ditado.modoGravar)}
             className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
@@ -861,7 +864,7 @@ export default function RegistroAula({
         >
           {planoInfo.usado
             ? `📘 Usando o plano de curso: ${planoInfo.periodo}º ${planoInfo.tipoPeriodo} (${planoInfo.habilidadesNoPeriodo} habilidades). Só habilidades desse período são usadas.`
-            : "Sem plano de curso para esta série/ano letivo. Cadastre na aba Plano de curso para a I.A priorizar as habilidades do período."}
+            : "Sem plano de curso para esta série/ano letivo. Cadastre em Plano de aulas › Plano de curso para a I.A priorizar as habilidades do período."}
         </div>
       )}
 

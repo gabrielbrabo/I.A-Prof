@@ -2,7 +2,8 @@ import { useInstalarApp } from "../lib/useInstalarApp";
 
 // variante "cartao": tela de login/cadastro (destaque embaixo do formulario)
 // variante "topo": botao compacto no cabecalho do app
-export default function InstalarApp({ variante }: { variante: "cartao" | "topo" }) {
+// variante "barra": botao da barra de baixo (celular)
+export default function InstalarApp({ variante }: { variante: "cartao" | "topo" | "barra" }) {
   const { disponivel, instalar, mostrarIos, fecharIos } = useInstalarApp();
   if (!disponivel) return null;
 
@@ -20,6 +21,16 @@ export default function InstalarApp({ variante }: { variante: "cartao" | "topo" 
             <span className="block text-xs text-indigo-800">Abra direto da tela inicial, como um aplicativo.</span>
           </span>
           <span className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white">Instalar</span>
+        </button>
+      ) : variante === "barra" ? (
+        <button
+          type="button"
+          onClick={instalar}
+          data-tour="instalar"
+          className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 pb-2 pt-1.5 text-[11px] font-medium leading-tight text-slate-500"
+        >
+          <span className="rounded-full px-3 py-0.5 text-base">📲</span>
+          <span className="w-full truncate text-center">Instalar</span>
         </button>
       ) : (
         <button
