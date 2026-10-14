@@ -27,10 +27,10 @@ export default function ItemCard({ item, habilidadesPeriodo, habilidadesOutros =
   const [resultados, setResultados] = useState<Opcao[] | null>(null);
   const [verOutros, setVerOutros] = useState(false); // mostrar habilidades de outros periodos (escolha manual)
   const periodoDe = (codigo: string) => habilidadesOutros.find((x) => x.codigo === codigo)?.periodo;
-  // Outros periodos, do mesmo componente primeiro
+  // Outros periodos: SOMENTE da materia do card
   const outrosDoComponente = habilidadesOutros
-    .filter((h) => !item.habilidades.some((x) => x.codigo === h.codigo))
-    .sort((a, b) => Number(mesmoComponente(b.componente, item.componente)) - Number(mesmoComponente(a.componente, item.componente)) || a.periodo - b.periodo);
+    .filter((h) => mesmoComponente(h.componente, item.componente) && !item.habilidades.some((x) => x.codigo === h.codigo))
+    .sort((a, b) => a.periodo - b.periodo);
 
   const escolhidos = new Set(item.habilidades.map((h) => h.codigo));
   // Sem habilidade deste componente no periodo (ex.: nome do componente diferente no plano):
@@ -68,7 +68,7 @@ export default function ItemCard({ item, habilidadesPeriodo, habilidadesOutros =
   // Busca entre as habilidades do plano do periodo (e dos outros periodos, se o professor marcar)
   function buscar() {
     const termos = sem(busca).split(/\s+/).filter(Boolean);
-    const achadas = [...habilidadesPeriodo, ...(verOutros ? habilidadesOutros : [])]
+    const achadas = [...habilidadesPeriodo, ...(verOutros ? outrosDoComponente : [])]
       .filter((h) => termos.every((t) => sem(`${h.codigo} ${h.habilidade} ${h.componente}`).includes(t)))
       .sort((a, b) => Number(mesmoComponente(b.componente, item.componente)) - Number(mesmoComponente(a.componente, item.componente)));
     setResultados(achadas.map(({ codigo, habilidade, fonte }) => ({ codigo, habilidade, fonte })));
@@ -212,14 +212,20 @@ export default function ItemCard({ item, habilidadesPeriodo, habilidadesOutros =
               onChange={(e) => adicionar(e.target.value)}
               className="mt-1 w-full rounded-lg border border-orange-300 px-3 py-2 text-sm focus:border-orange-500 focus:outline-none"
             >
-              <option value="">{cheio ? `Máximo de ${MAX_HABILIDADES} habilidades` : `+ Adicionar de outro ${nomePeriodo}`}</option>
+              <option value="">
+                {cheio
+                  ? `Máximo de ${MAX_HABILIDADES} habilidades`
+                  : outrosDoComponente.length
+                    ? `+ Adicionar de outro ${nomePeriodo} (${item.componente})`
+                    : `Nenhuma habilidade de ${item.componente} em outro ${nomePeriodo}`}
+              </option>
               {[...new Set(outrosDoComponente.map((h) => h.periodo))].sort().map((n) => (
                 <optgroup key={n} label={`${n}º ${nomePeriodo}`}>
                   {outrosDoComponente
                     .filter((h) => h.periodo === n)
                     .map((o) => (
                       <option key={o.codigo} value={o.codigo}>
-                        {o.codigo} {o.componente !== item.componente ? `(${o.componente})` : ""} — {o.habilidade.slice(0, 100)}
+                        {o.codigo} — {o.habilidade.slice(0, 100)}
                         {o.habilidade.length > 100 ? "…" : ""}
                       </option>
                     ))}
