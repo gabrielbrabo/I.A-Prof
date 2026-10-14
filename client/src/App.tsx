@@ -210,8 +210,49 @@ function Painel() {
       </nav>
 
       <main className="mx-auto max-w-5xl px-3 pb-24 pt-4 sm:px-4 md:py-6">
+        {/* Uso de I.A no mes (barra no topo do Gerar aula) */}
+        {situacao && aba === "registro" && (
+          <div className="mb-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+            <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+              <span className="font-medium text-slate-600">⚡ Uso de I.A neste mês</span>
+              <span
+                className={`font-semibold ${
+                  situacao.uso.percentual >= 90 ? "text-rose-600" : situacao.uso.percentual >= 70 ? "text-amber-700" : "text-emerald-700"
+                }`}
+              >
+                {situacao.uso.percentual}% usado
+              </span>
+            </div>
+            <div
+              className="h-2 overflow-hidden rounded-full bg-slate-100"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={situacao.uso.percentual}
+              aria-label="Uso de I.A neste mês"
+            >
+              <div
+                className={`h-full rounded-full transition-all ${
+                  situacao.uso.percentual >= 90 ? "bg-rose-500" : situacao.uso.percentual >= 70 ? "bg-amber-500" : "bg-emerald-500"
+                }`}
+                style={{ width: `${Math.max(situacao.uso.percentual, situacao.uso.percentual > 0 ? 2 : 0)}%` }}
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-slate-400">
+              {situacao.acesso === "teste" ? "Limite do teste grátis." : "Renova todo dia 1º."}
+              {situacao.uso.percentual >= 90 && (
+                <>
+                  {" "}
+                  <button onClick={() => ir("assinatura")} className="font-medium text-indigo-600 hover:underline">
+                    Ver planos
+                  </button>
+                </>
+              )}
+            </p>
+          </div>
+        )}
         {/* Teste gratis / limite do plano */}
-        {situacao && aba !== "assinatura" && (situacao.acesso === "bloqueado" || situacao.acesso === "teste" || situacao.uso.percentual >= 80) && (
+        {situacao && aba !== "assinatura" && (situacao.acesso === "bloqueado" || situacao.acesso === "teste" || (situacao.uso.percentual >= 80 && aba !== "registro")) && (
           <div
             className={`mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg px-4 py-2.5 text-sm ${
               situacao.acesso === "bloqueado" ? "bg-rose-50 text-rose-700" : "bg-indigo-50 text-indigo-800"
