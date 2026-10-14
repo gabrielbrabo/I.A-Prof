@@ -21,6 +21,11 @@ export const env = {
   googleClientId: process.env.GOOGLE_CLIENT_ID || "",
   // Custo da I.A em reais (para o limite de uso de cada plano)
   cotacaoDolar: Number(process.env.COTACAO_DOLAR || 5.3),
+  // Integracao com o Diario escolar (X Escolar): endereco da API do Diario e chave compartilhada
+  diario: {
+    url: (process.env.DIARIO_API_URL || "").replace(/\/+$/, ""),
+    chave: process.env.DIARIO_CHAVE || "",
+  },
   // Pagamentos (assinatura). Vazio = modo desenvolvimento: assinar libera na hora, nada e cobrado.
   payments: {
     provider: (process.env.PAYMENTS_PROVIDER || "").toLowerCase(), // "asaas" ou vazio
@@ -31,3 +36,5 @@ export const env = {
 };
 
 export const pagamentosLigados = () => env.payments.provider === "asaas" && !!env.payments.asaasKey;
+
+export const diarioLigado = () => !!env.diario.url && !!env.diario.chave;

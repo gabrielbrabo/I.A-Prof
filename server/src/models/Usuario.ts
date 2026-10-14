@@ -10,6 +10,13 @@ const usuarioSchema = new Schema(
     foto: { type: String, default: null },
     testeAte: { type: Date, required: true }, // fim do teste gratis
     testeAulas: { type: Number, default: 0 }, // aulas geradas durante o teste
+    // Conexao com o Diario escolar (a senha do Diario nunca e guardada; so o token de vinculo)
+    diario: {
+      token: { type: String, default: null },
+      nome: { type: String, default: null },
+      escolas: { type: [String], default: [] },
+      conectadoEm: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );

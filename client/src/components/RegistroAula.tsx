@@ -5,6 +5,8 @@ import { configApi, ErroAulaNoDia, InfoPlano, ItemRegistro, Opcao, registroApi, 
 import { planoApi, PlanoCurso } from "../api/planoCurso";
 import { ANOS, UFS, formatarComLimite } from "../lib/formatarRegistro";
 import ItemCard from "./ItemCard";
+import { diarioApi, ErroAulaNoDiario, ErroReconectarDiario, nomeTurmaDiario, SituacaoDiario, TurmaDiario, VerificacaoDiario } from "../api/diario";
+import { ModalConflitoDiario } from "./Diario";
 import { lerPref, gravarPref, chaveDoUsuario, ufParaApi } from "../lib/prefs";
 
 const hoje = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD no fuso local
@@ -37,6 +39,7 @@ interface Rascunho {
   planoInfo: InfoPlano | null;
   textoManual?: string | null;
   turma?: string;
+  diarioTurmaId?: string;
   abertura?: string[];
 }
 function lerRascunho(): Rascunho | null {
@@ -67,6 +70,9 @@ export default function RegistroAula({
   onContexto,
   onUsouIA,
   professorNome,
+  diario = null,
+  onDiario,
+  onAbrirDiario,
   onSemAcesso,
 }: {
   onSalvo: () => void;
@@ -76,6 +82,9 @@ export default function RegistroAula({
   onContexto?: (ano: string, anoLetivo: number) => void; // serie/ano letivo da aula (aviso da aba Plano de curso)
   onUsouIA?: () => void; // atualiza o uso do plano no topo
   professorNome?: string; // nome do usuario logado
+  diario?: SituacaoDiario | null; // conexao com o D.E.V (fica no App, botao no topo)
+  onDiario?: (s: SituacaoDiario | null) => void;
+  onAbrirDiario?: () => void;
   onSemAcesso?: () => void; // teste acabou / sem assinatura / limite do mes: abre "Minha assinatura"
 }) {
   const editando = registroEditar ?? null;
@@ -120,6 +129,103 @@ export default function RegistroAula({
   const [semAcesso, setSemAcesso] = useState(false); // ultima tentativa barrada por plano/limite
   // Aula ja salva no mesmo dia: o professor escolhe substituir, juntar ou salvar como outra
   const [aulaNoDia, setAulaNoDia] = useState<ErroAulaNoDia["existente"] | null>(null);
+
+  // ---------- Diario escolar ----------
+  const situacaoDiario = diario;
+  const setSituacaoDiario = (f: (s: SituacaoDiario | null) => SituacaoDiario | null) => onDiario?.(f(diario));
+  const [turmasDiario, setTurmasDiario] = useState<TurmaDiario[] | null>(null);
+  const [erroTurmasDiario, setErroTurmasDiario] = useState<string | null>(null);
+  // "" = nao escolhida; "outra" = turma digitada (fora do Diario); senao o id da turma no Diario
+  const [diarioTurmaId, setDiarioTurmaId] = useState<string>(
+    () => editando?.diarioTurmaId ?? rascunho?.diarioTurmaId ?? lerPref(`diarioTurma.${editando?.ano ?? lerPref("ano", "")}`, "")
+  );
+  const [enviarDiario, setEnviarDiario] = useState(() => lerPref("enviarDiario", "1") === "1");
+  const [conflitoDiario, setConflitoDiario] = useState<{ registroId: string; atual: string; aviso: string } | null>(null);
+  const [enviandoDiario, setEnviandoDiario] = useState(false);
+  const idTurmaDiario = /^[a-f0-9]{24}$/i.test(diarioTurmaId) ? diarioTurmaId : null;
+  const usaTurmasDiario = !!situacaoDiario?.conectado && !!turmasDiario?.length;
+
+  useEffect(() => {
+    if (!situacaoDiario?.conectado) {
+      setTurmasDiario(null);
+      return;
+    }
+    let ativo = true;
+    setErroTurmasDiario(null);
+    diarioApi
+      .turmas(String(anoLetivo))
+      .then((l) => ativo && setTurmasDiario(l))
+      .catch((e) => {
+        if (!ativo) return;
+        if (e instanceof ErroReconectarDiario) setSituacaoDiario((s) => (s ? { ...s, conectado: false, nome: null, escolas: [] } : s));
+        setErroTurmasDiario(e instanceof Error ? e.message : "Erro ao buscar turmas do Diário");
+        setTurmasDiario(null);
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [situacaoDiario?.conectado, anoLetivo]);
+
+  // Ao escolher turma do Diario + data: avisa na hora se ja tem aula registrada nesse dia (ou se a data nao aceita aula)
+  const [verifDiario, setVerifDiario] = useState<VerificacaoDiario | null>(null);
+  const [verDescricaoDiario, setVerDescricaoDiario] = useState(false);
+  useEffect(() => {
+    setVerifDiario(null);
+    setVerDescricaoDiario(false);
+    if (!idTurmaDiario || !situacaoDiario?.conectado || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return;
+    let ativo = true;
+    const t = window.setTimeout(() => {
+      diarioApi
+        .verificar(idTurmaDiario, data)
+        .then((v) => ativo && setVerifDiario(v))
+        .catch(() => ativo && setVerifDiario(null)); // sem conexao com o Diario: nao bloqueia, confere ao enviar
+    }, 400);
+    return () => {
+      ativo = false;
+      window.clearTimeout(t);
+    };
+  }, [idTurmaDiario, data, situacaoDiario?.conectado]);
+  // Aula aberta de Aulas salvas que ja e a mesma que esta no Diario: nao e conflito
+  const ehEstaAulaNoDiario = !!verifDiario?.id && verifDiario.id === editando?.diarioRegistroId;
+
+  function escolherTurmaDiario(id: string) {
+    setDiarioTurmaId(id);
+    const t = turmasDiario?.find((x) => x.id === id);
+    if (t) setTurma(nomeTurmaDiario(t));
+    else if (id === "outra") setTurma("");
+  }
+
+  // Envia a aula salva ao Diario; devolve o texto para o aviso final (ou abre a escolha se ja houver aula no dia)
+  async function enviarAoDiario(registroId: string, aviso: string, modo?: "substituir" | "juntar"): Promise<string | null> {
+    try {
+      const r = await diarioApi.enviar(registroId, modo);
+      const como = r.acao === "substituida" ? " (substituiu a aula que estava lá)" : r.acao === "juntada" ? " (juntada à aula que estava lá)" : "";
+      return `${aviso} Também foi enviada ao Diário escolar${como}.`;
+    } catch (e) {
+      if (e instanceof ErroAulaNoDiario) {
+        setConflitoDiario({ registroId, atual: e.descricaoAtual, aviso });
+        return null; // espera o professor escolher
+      }
+      if (e instanceof ErroReconectarDiario) setSituacaoDiario((s) => (s ? { ...s, conectado: false, nome: null, escolas: [] } : s));
+      const msg = e instanceof Error ? e.message : "erro desconhecido";
+      return `${aviso} ⚠️ Não foi enviada ao Diário: ${msg} Você pode enviar depois em Aulas salvas.`;
+    }
+  }
+
+  async function decidirConflitoDiario(modo: "substituir" | "juntar" | null) {
+    if (!conflitoDiario) return;
+    const { registroId, aviso } = conflitoDiario;
+    if (!modo) {
+      setConflitoDiario(null);
+      onFecharEdicao?.(`${aviso} Não foi enviada ao Diário (você pode enviar depois em Aulas salvas).`);
+      return;
+    }
+    setEnviandoDiario(true);
+    const final = await enviarAoDiario(registroId, aviso, modo);
+    setEnviandoDiario(false);
+    setConflitoDiario(null);
+    onFecharEdicao?.(final ?? aviso);
+  }
   // Cards alterados depois de editar o texto a mao: avisa que o texto nao acompanha
   const itensNoManual = useRef<ItemRegistro[] | null>(null);
   const [gerando, setGerando] = useState(false);
@@ -131,8 +237,8 @@ export default function RegistroAula({
   useEffect(() => {
     if (editando || carregandoPlano || !planoPronto) return;
     // Periodo ainda nao aplicado (plano nao carregou): mantem o do rascunho para nao perder
-    gravarRascunho({ data, texto, periodo: periodo || periodoInicial.current || 0, itens, planoInfo, textoManual, turma, abertura });
-  }, [editando, carregandoPlano, planoPronto, data, texto, periodo, itens, planoInfo, textoManual, turma, abertura]);
+    gravarRascunho({ data, texto, periodo: periodo || periodoInicial.current || 0, itens, planoInfo, textoManual, turma, diarioTurmaId, abertura });
+  }, [editando, carregandoPlano, planoPronto, data, texto, periodo, itens, planoInfo, textoManual, turma, diarioTurmaId, abertura]);
 
   // Limites de caracteres: entrada vem do servidor; saida = limite do campo no diario (professor pode ajustar)
   const [limiteEntrada, setLimiteEntrada] = useState(1000);
@@ -324,6 +430,7 @@ export default function RegistroAula({
       const corpo = {
         professor: professor || undefined,
         turma: turma.trim() || undefined,
+        diarioTurmaId: idTurmaDiario,
         ano,
         uf: ufParaApi(uf),
         data,
@@ -341,16 +448,28 @@ export default function RegistroAula({
           conferir: confianca === "baixa" && habilidades.length > 0,
         })),
       };
-      const lembrarTurma = () => turma.trim() && gravarPref(`turma.${ano}`, turma.trim());
+      const lembrarTurma = () => {
+        if (turma.trim()) gravarPref(`turma.${ano}`, turma.trim());
+        gravarPref(`diarioTurma.${ano}`, diarioTurmaId);
+      };
+      // Turma do Diario escolhida e "enviar" marcado: manda a aula salva para o Diario
+      const mandarDiario = !!idTurmaDiario && enviarDiario && !!situacaoDiario?.conectado;
       if (editando) {
-        await registroApi.atualizar(editando._id, corpo);
+        const doc = await registroApi.atualizar(editando._id, corpo);
         lembrarTurma();
         onSalvo();
         // Sai da edicao: o Registro de aula volta limpo para uma nova aula
-        onFecharEdicao?.("Alterações salvas! A aula está em Aulas salvas. Pode registrar uma nova aula.");
+        const avisoEd = "Alterações salvas! A aula está em Aulas salvas. Pode registrar uma nova aula.";
+        if (mandarDiario) {
+          const final = await enviarAoDiario(doc._id, avisoEd, ehEstaAulaNoDiario ? "substituir" : undefined); // mesma aula do Diario: atualiza
+          onSalvo();
+          if (final) onFecharEdicao?.(final);
+          return;
+        }
+        onFecharEdicao?.(avisoEd);
         return;
       }
-      await registroApi.salvar(corpo);
+      const doc = await registroApi.salvar(corpo);
       lembrarTurma();
       onSalvo();
       const avisoSalvo =
@@ -361,6 +480,12 @@ export default function RegistroAula({
             : "Registro salvo! A aula está em Aulas salvas. Pode registrar uma nova aula.";
       // Formulario limpo para a proxima aula (a salva vai para o Historico)
       gravarRascunho(null); // aula salva: o formulario volta limpo
+      if (mandarDiario) {
+        const final = await enviarAoDiario(doc._id, avisoSalvo);
+        onSalvo();
+        if (final) onFecharEdicao?.(final);
+        return;
+      }
       onFecharEdicao?.(avisoSalvo);
     } catch (e) {
       if (e instanceof ErroAulaNoDia) setAulaNoDia(e.existente);
@@ -434,6 +559,7 @@ export default function RegistroAula({
             onChange={(e) => {
               mudar(setAno, "ano")(e.target.value);
               setTurma(lerPref(`turma.${e.target.value}`, "")); // turma guardada dessa serie
+              setDiarioTurmaId(lerPref(`diarioTurma.${e.target.value}`, ""));
             }}
           >
             <option value="">Selecione…</option>
@@ -445,8 +571,44 @@ export default function RegistroAula({
           </select>
         </div>
         <div className="min-w-0">
-          <label className="text-xs font-medium text-slate-500">Turma</label>
-          <input className={campo} value={turma} placeholder="ex.: 4º A" onChange={(e) => setTurma(e.target.value)} />
+          <div className="flex items-center justify-between gap-1">
+            <label className="text-xs font-medium text-slate-500">Turma</label>
+            {situacaoDiario && (
+              <button
+                type="button"
+                onClick={() => onAbrirDiario?.()}
+                className={`truncate text-[11px] font-semibold ${situacaoDiario.conectado ? "text-emerald-700" : "text-amber-700 hover:underline"}`}
+                title={situacaoDiario.conectado ? "Conectado ao D.E.V" : "Conectar ao D.E.V"}
+              >
+                {situacaoDiario.conectado ? "📒 D.E.V ✓" : "📒 Conectar D.E.V"}
+              </button>
+            )}
+          </div>
+          {usaTurmasDiario && diarioTurmaId !== "outra" ? (
+            <select
+              className={`${campo} ${!idTurmaDiario ? "border-amber-400 bg-amber-50" : ""}`}
+              value={idTurmaDiario ?? ""}
+              onChange={(e) => escolherTurmaDiario(e.target.value)}
+            >
+              <option value="">Selecione…</option>
+              {turmasDiario!.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {nomeTurmaDiario(t)}
+                  {situacaoDiario!.escolas.length > 1 ? ` — ${t.escola}` : ""}
+                  {t.papel === "ED_FISICA" ? " (Ed. Física)" : ""}
+                </option>
+              ))}
+              <option value="outra">Outra (não enviar ao Diário)</option>
+            </select>
+          ) : (
+            <input className={campo} value={turma} placeholder="ex.: 4º A" onChange={(e) => setTurma(e.target.value)} />
+          )}
+          {usaTurmasDiario && diarioTurmaId === "outra" && (
+            <button type="button" onClick={() => escolherTurmaDiario("")} className="mt-0.5 text-[11px] text-indigo-600 hover:underline">
+              usar turma do Diário
+            </button>
+          )}
+          {erroTurmasDiario && <p className="mt-0.5 text-[11px] text-rose-600">{erroTurmasDiario}</p>}
         </div>
         <div className="col-span-2 grid min-w-0 grid-cols-[5.5rem_1fr] gap-2 sm:col-span-1 lg:col-span-2">
           <div>
@@ -495,6 +657,32 @@ export default function RegistroAula({
           </select>
         </div>
       </div>
+
+      {/* Aviso do Diario escolar para a turma e data escolhidas */}
+      {verifDiario && !verifDiario.podeRegistrar && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          📒 <b>Diário escolar:</b> {verifDiario.motivo} A aula pode ser salva aqui, mas não será enviada ao Diário nesta data.
+        </div>
+      )}
+      {verifDiario?.existe && !ehEstaAulaNoDiario && (
+        <div className="rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p>
+            📒 <b>Já existe aula registrada no Diário em {data.split("-").reverse().join("/")}</b>
+            {turma.trim() ? ` para a turma ${turma.trim()}` : ""}. Ao salvar, você escolhe se substitui ou junta com a aula de lá.
+          </p>
+          <button type="button" onClick={() => setVerDescricaoDiario((v) => !v)} className="mt-1 text-xs font-medium text-amber-800 underline">
+            {verDescricaoDiario ? "esconder aula do Diário" : "ver aula que está no Diário"}
+          </button>
+          {verDescricaoDiario && (
+            <p className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-lg bg-white px-3 py-2 text-xs leading-relaxed text-slate-700">{verifDiario.descricao}</p>
+          )}
+        </div>
+      )}
+      {verifDiario?.existe && ehEstaAulaNoDiario && (
+        <div className="rounded-lg bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">
+          📒 Esta aula já está no Diário. Se você alterar e salvar, ela será atualizada lá.
+        </div>
+      )}
 
       {!carregandoPlano && !periodosDisponiveis.length && (
         <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -756,6 +944,20 @@ export default function RegistroAula({
                 para salvar.
               </p>
             )}
+            {idTurmaDiario && situacaoDiario?.conectado && (
+              <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-indigo-600"
+                  checked={enviarDiario}
+                  onChange={(e) => {
+                    setEnviarDiario(e.target.checked);
+                    gravarPref("enviarDiario", e.target.checked ? "1" : "0");
+                  }}
+                />
+                Enviar também para o <b>Diário escolar</b> ({turma})
+              </label>
+            )}
             <div className="mt-4 flex flex-wrap gap-2 sm:justify-end">
               {!editandoTexto && (
                 <button
@@ -779,6 +981,8 @@ export default function RegistroAula({
           </div>
         </>
       )}
+      {conflitoDiario && <ModalConflitoDiario data={data} atual={conflitoDiario.atual} enviando={enviandoDiario} onEscolher={decidirConflitoDiario} />}
+
       {/* Ja existe aula salva nesse dia */}
       {aulaNoDia && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={() => setAulaNoDia(null)}>

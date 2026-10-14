@@ -29,6 +29,10 @@ const registroAulaSchema = new Schema(
     itens: { type: [itemSchema], default: [] },
     textoFinal: { type: String, required: true },
     textoEditado: { type: Boolean, default: false }, // professor editou o texto final a mao
+    // Diario escolar: turma escolhida e situacao do envio
+    diarioTurmaId: { type: String, default: null },
+    diarioEnviadoEm: { type: Date, default: null },
+    diarioRegistroId: { type: String, default: null },
   },
   { timestamps: true }
 );

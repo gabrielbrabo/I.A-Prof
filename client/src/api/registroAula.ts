@@ -77,6 +77,9 @@ export interface RegistroSalvo {
   textoFinal: string;
   textoEditado?: boolean; // texto final editado a mao
   abertura?: string[];
+  diarioTurmaId?: string | null;
+  diarioEnviadoEm?: string | null; // enviada ao Diario escolar
+  diarioRegistroId?: string | null; // id da aula no Diario
   createdAt: string;
 }
 
@@ -84,6 +87,7 @@ export interface RegistroSalvo {
 export type CorpoSalvar = {
   professor?: string;
   turma?: string;
+  diarioTurmaId?: string | null; // turma escolhida do Diario escolar
   ano: string;
   uf?: string | null;
   data: string;

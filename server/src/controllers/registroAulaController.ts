@@ -52,6 +52,7 @@ export async function gerar(req: Request, res: Response) {
 const salvarSchema = z.object({
   professor: z.string().nullish(),
   turma: z.string().nullish(),
+  diarioTurmaId: z.string().regex(/^[a-f0-9]{24}$/i).nullish(), // turma escolhida do Diario escolar
   ano: z.string().min(1),
   uf: z.string().length(2).nullish(),
   data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -140,7 +141,8 @@ export async function salvar(req: Request, res: Response) {
   }
 
   if (existente && (duplicado === "substituir" || duplicado === "juntar")) {
-    const doc = await RegistroAula.findByIdAndUpdate(existente._id, { ...corpo, textoFinal: fmt.texto, textoEditado: !!manual }, { new: true });
+    // texto mudou: precisa enviar de novo ao Diario
+    const doc = await RegistroAula.findByIdAndUpdate(existente._id, { ...corpo, textoFinal: fmt.texto, textoEditado: !!manual, diarioEnviadoEm: null }, { new: true });
     return res.json(doc);
   }
   const doc = await RegistroAula.create({ ...corpo, textoFinal: fmt.texto, textoEditado: !!manual });
@@ -161,9 +163,13 @@ export async function atualizar(req: Request, res: Response) {
   if (fmt.excede) {
     return res.status(400).json({ message: `O registro passou do limite de ${limite} caracteres. Encurte o texto.` });
   }
+  const antes = await RegistroAula.findOne({ _id: req.params.id, usuario: req.usuarioId }).lean();
+  if (!antes) return res.status(404).json({ message: "Registro nao encontrado" });
+  // texto, data ou turma mudaram: o que esta no Diario ficou desatualizado (precisa enviar de novo)
+  const mudouDiario = antes.textoFinal !== fmt.texto || antes.data !== dados.data || (antes.diarioTurmaId ?? null) !== (dados.diarioTurmaId ?? null);
   const doc = await RegistroAula.findOneAndUpdate(
     { _id: req.params.id, usuario: req.usuarioId },
-    { ...dados, textoFinal: fmt.texto, textoEditado: !!manual },
+    { ...dados, textoFinal: fmt.texto, textoEditado: !!manual, ...(mudouDiario ? { diarioEnviadoEm: null } : {}) },
     { new: true }
   );
   if (!doc) return res.status(404).json({ message: "Registro nao encontrado" });

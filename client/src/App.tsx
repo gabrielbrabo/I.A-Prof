@@ -12,6 +12,8 @@ import Entrar from "./components/Entrar";
 import Assinatura from "./components/Assinatura";
 import InstalarApp from "./components/InstalarApp";
 import Logo from "./components/Logo";
+import { diarioApi, SituacaoDiario } from "./api/diario";
+import { ModalConectarDiario } from "./components/Diario";
 
 const QTD_PERIODOS: Record<TipoPeriodo, number> = { bimestre: 4, trimestre: 3, semestre: 2 };
 
@@ -52,6 +54,12 @@ function Painel() {
       .catch(() => {});
   useEffect(() => {
     carregarConta();
+  }, []);
+  // Conexao com o D.E.V (Diario escolar): botao embaixo do nome do professor
+  const [diario, setDiario] = useState<SituacaoDiario | null>(null);
+  const [modalDiario, setModalDiario] = useState(false);
+  useEffect(() => {
+    diarioApi.status().then(setDiario).catch(() => setDiario(null));
   }, []);
   const [versao, setVersao] = useState(0);
   const [editando, setEditando] = useState<RegistroSalvo | null>(null); // registro aberto pelo historico
@@ -153,8 +161,21 @@ function Painel() {
               <span className="hidden lg:inline"> {tema === "escuro" ? "Claro" : "Escuro"}</span>
             </button>
             <span className="flex min-w-0 items-center gap-1 border-l border-slate-200 pl-2 text-xs text-slate-500 md:gap-2 md:pl-3">
-              <span className="min-w-0 max-w-[7.5rem] truncate sm:max-w-40 md:hidden lg:inline lg:max-w-32" title={usuario?.email}>
-                {usuario?.nome ?? ""}
+              <span className="flex min-w-0 flex-col items-end leading-tight">
+                <span className="min-w-0 max-w-[7.5rem] truncate sm:max-w-40 md:hidden lg:inline lg:max-w-32" title={usuario?.email}>
+                  {usuario?.nome ?? ""}
+                </span>
+                {diario && (
+                  <button
+                    onClick={() => setModalDiario(true)}
+                    title={diario.conectado ? `Conectado ao D.E.V${diario.nome ? ` como ${diario.nome}` : ""}` : "Conectar sua conta do D.E.V (Diário escolar)"}
+                    className={`mt-0.5 whitespace-nowrap rounded px-1.5 py-px text-[10px] font-medium ${
+                      diario.conectado ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-amber-50 text-amber-800 hover:bg-amber-100"
+                    }`}
+                  >
+                    {diario.conectado ? "✓ Conectado ao D.E.V" : "Conectar ao D.E.V"}
+                  </button>
+                )}
               </span>
               <button onClick={sair} className="shrink-0 rounded px-2 py-1.5 hover:bg-slate-100 hover:text-rose-600">
                 Sair
@@ -222,6 +243,9 @@ function Painel() {
             onSalvo={() => setVersao((v) => v + 1)}
             onUsouIA={carregarConta}
             professorNome={usuario?.nome}
+            diario={diario}
+            onDiario={setDiario}
+            onAbrirDiario={() => setModalDiario(true)}
             onSemAcesso={() => {
               carregarConta();
               setAba("assinatura");
@@ -255,6 +279,7 @@ function Painel() {
           />
         )}
       </main>
+      {modalDiario && diario && <ModalConectarDiario situacao={diario} onFechar={() => setModalDiario(false)} onMudou={setDiario} />}
     </div>
   );
 }

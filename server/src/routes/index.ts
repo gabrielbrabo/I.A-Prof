@@ -5,6 +5,7 @@ import * as pc from "../controllers/planoCursoController";
 import * as voz from "../controllers/vozController";
 import * as auth from "../controllers/authController";
 import * as ass from "../controllers/assinaturaController";
+import * as dia from "../controllers/diarioController";
 import { proteger } from "../middleware/auth";
 
 // Encaminha erros de handlers async para o tratador de erro do Express 4
@@ -37,6 +38,14 @@ router.post("/assinatura/cancelar", h(ass.cancelar));
 router.post("/assinatura/reativar", h(ass.reativar));
 
 router.get("/config", h(reg.config));
+
+// Diario escolar (X Escolar): conectar conta, turmas e envio da aula
+router.get("/diario", h(dia.status));
+router.post("/diario/conectar", h(dia.conectar));
+router.delete("/diario/conectar", h(dia.desconectar));
+router.get("/diario/turmas", h(dia.turmas));
+router.get("/diario/verificar", h(dia.verificar));
+router.post("/diario/enviar", h(dia.enviar));
 
 router.get("/habilidades/componentes", h(hab.getComponentes));
 router.get("/habilidades/ufs", h(hab.getUfs));
