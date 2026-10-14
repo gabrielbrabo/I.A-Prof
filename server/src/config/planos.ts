@@ -40,5 +40,5 @@ export type Ciclo = "mensal" | "anual";
 export const precoDoCiclo = (p: Plano, ciclo: Ciclo) => (ciclo === "anual" ? p.precoMensal * 10 : p.precoMensal); // anual = 2 meses gratis
 export const planoPorId = (id: string) => PLANOS.find((p) => p.id === id) ?? null;
 
-// Teste gratis: 15 dias OU 20 aulas geradas (o que acabar primeiro)
-export const TESTE = { dias: 15, aulas: 20, limiteIaCentavos: 300 };
+// Teste gratis: 30 dias OU 30 aulas geradas (o que acabar primeiro)
+export const TESTE = { dias: 30, aulas: 30, limiteIaCentavos: 450 }; // ~R$ 0,12 por aula: 30 aulas cabem com folga

@@ -160,7 +160,7 @@ export default function Entrar({ onEntrou }: { onEntrou: () => void }) {
             <div ref={botaoGoogle} className="flex justify-center" />
           </div>
           {modo === "cadastro" && (
-            <p className="text-center text-[11px] text-slate-500">Teste grátis por 15 dias ou 20 aulas, sem cartão.</p>
+            <p className="text-center text-[11px] text-slate-500">Teste grátis por 30 dias ou 30 aulas, sem cartão.</p>
           )}
         </form>
         <InstalarApp variante="cartao" />

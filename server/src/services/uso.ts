@@ -84,7 +84,9 @@ export async function situacaoDoUsuario(usuarioId: string): Promise<Situacao> {
   ]);
   if (!u) throw new Error("Usuário não encontrado");
   const agora = Date.now();
-  const testeAte = new Date(u.testeAte);
+  // Fim do teste: o que estiver salvo ou cadastro + TESTE.dias (contas antigas ganham o prazo novo)
+  const criadoEm = new Date((u as { createdAt?: Date }).createdAt ?? u.testeAte).getTime();
+  const testeAte = new Date(Math.max(new Date(u.testeAte).getTime(), criadoEm + TESTE.dias * 86400000));
   const diasRestantes = Math.max(0, Math.ceil((testeAte.getTime() - agora) / 86400000));
   const testeAtivo = testeAte.getTime() > agora && (u.testeAulas ?? 0) < TESTE.aulas;
   const assinante = assinaturaValida(a as never);

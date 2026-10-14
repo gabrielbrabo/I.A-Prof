@@ -345,49 +345,45 @@ function Painel() {
       )}
 
       <main className="mx-auto max-w-5xl px-3 pb-10 pt-4 sm:px-4 md:py-6">
-        {/* Uso de I.A no mes (barra no topo do Gerar aula) */}
-        {situacao && aba === "registro" && (
-          <div className="mb-3 rounded-lg border border-slate-200 bg-white px-3 py-2" data-tour="uso">
-            <div className="mb-1 flex items-center justify-between gap-2 text-xs">
-              <span className="font-medium text-slate-600">⚡ Uso de I.A neste mês</span>
-              <span
-                className={`font-semibold ${
-                  situacao.uso.percentual >= 90 ? "text-rose-600" : situacao.uso.percentual >= 70 ? "text-amber-700" : "text-emerald-700"
-                }`}
-              >
-                {situacao.uso.percentual}% usado
-              </span>
+        {/* Uso no topo do Gerar aula: no teste grátis mostra aulas e dias; assinante vê o uso de I.A do mês */}
+        {situacao && aba === "registro" && (() => {
+          const teste = situacao.acesso === "teste";
+          const t = situacao.teste;
+          const pctAulas = t.aulasLimite ? Math.round((t.aulasUsadas / t.aulasLimite) * 100) : 0;
+          // no teste vale o que acabar primeiro: as aulas ou o limite de I.A
+          const pct = Math.min(100, teste ? Math.max(pctAulas, situacao.uso.percentual) : situacao.uso.percentual);
+          const cor = pct >= 90 ? "rose" : pct >= 70 ? "amber" : "emerald";
+          const corTexto = { rose: "text-rose-600", amber: "text-amber-700", emerald: "text-emerald-700" }[cor];
+          const corBarra = { rose: "bg-rose-500", amber: "bg-amber-500", emerald: "bg-emerald-500" }[cor];
+          return (
+            <div className="mb-3 rounded-lg border border-slate-200 bg-white px-3 py-2" data-tour="uso">
+              <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+                <span className="font-medium text-slate-600">{teste ? "🎁 Teste grátis" : "⚡ Uso de I.A neste mês"}</span>
+                <span className={`font-semibold ${corTexto}`}>
+                  {teste ? `${t.aulasUsadas} de ${t.aulasLimite} aulas` : `${situacao.uso.percentual}% usado`}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={teste ? "Aulas usadas no teste grátis" : "Uso de I.A neste mês"}>
+                <div className={`h-full rounded-full transition-all ${corBarra}`} style={{ width: `${Math.max(pct, pct > 0 ? 2 : 0)}%` }} />
+              </div>
+              <p className="mt-1 text-[11px] text-slate-400">
+                {teste
+                  ? `${t.diasRestantes} dia(s) restante(s) · ${Math.max(0, t.aulasLimite - t.aulasUsadas)} aula(s) restante(s). Vale o que acabar primeiro.`
+                  : "Renova todo dia 1º."}
+                {(teste || pct >= 90) && (
+                  <>
+                    {" "}
+                    <button onClick={() => ir("assinatura")} className="font-medium text-indigo-600 hover:underline">
+                      {teste ? "Assinar" : "Ver planos"}
+                    </button>
+                  </>
+                )}
+              </p>
             </div>
-            <div
-              className="h-2 overflow-hidden rounded-full bg-slate-100"
-              role="progressbar"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={situacao.uso.percentual}
-              aria-label="Uso de I.A neste mês"
-            >
-              <div
-                className={`h-full rounded-full transition-all ${
-                  situacao.uso.percentual >= 90 ? "bg-rose-500" : situacao.uso.percentual >= 70 ? "bg-amber-500" : "bg-emerald-500"
-                }`}
-                style={{ width: `${Math.max(situacao.uso.percentual, situacao.uso.percentual > 0 ? 2 : 0)}%` }}
-              />
-            </div>
-            <p className="mt-1 text-[11px] text-slate-400">
-              {situacao.acesso === "teste" ? "Limite do teste grátis." : "Renova todo dia 1º."}
-              {situacao.uso.percentual >= 90 && (
-                <>
-                  {" "}
-                  <button onClick={() => ir("assinatura")} className="font-medium text-indigo-600 hover:underline">
-                    Ver planos
-                  </button>
-                </>
-              )}
-            </p>
-          </div>
-        )}
+          );
+        })()}
         {/* Teste gratis / limite do plano */}
-        {situacao && aba !== "assinatura" && (situacao.acesso === "bloqueado" || situacao.acesso === "teste" || (situacao.uso.percentual >= 80 && aba !== "registro")) && (
+        {situacao && aba !== "assinatura" && (situacao.acesso === "bloqueado" || ((situacao.acesso === "teste" || situacao.uso.percentual >= 80) && aba !== "registro")) && (
           <div
             className={`mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg px-4 py-2.5 text-sm ${
               situacao.acesso === "bloqueado" ? "bg-rose-50 text-rose-700" : "bg-indigo-50 text-indigo-800"
