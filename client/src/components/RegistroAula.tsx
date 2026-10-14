@@ -4,6 +4,7 @@ import { ErroApi } from "../lib/sessao";
 import { configApi, ErroAulaNoDia, InfoPlano, ItemRegistro, Opcao, registroApi, RegistroSalvo } from "../api/registroAula";
 import { planoApi, PlanoCurso } from "../api/planoCurso";
 import { ANOS, UFS, formatarComLimite } from "../lib/formatarRegistro";
+import { sincronizarTexto } from "../lib/sincronizarTexto";
 import ItemCard from "./ItemCard";
 import { diarioApi, ErroAulaNoDiario, ErroReconectarDiario, nomeTurmaDiario, SituacaoDiario, TurmaDiario, VerificacaoDiario } from "../api/diario";
 import { ModalConflitoDiario } from "./Diario";
@@ -361,6 +362,25 @@ export default function RegistroAula({
   const textoMontado = fmt?.texto ?? "";
   const textoFinal = textoManual ?? textoMontado; // o que vai para o diario
   const excede = textoManual != null ? !!limiteNum && textoManual.length > limiteNum : !!fmt?.excede;
+  // Texto editado a mao + professor mudou habilidades nos cards: leva a mudanca para dentro do texto
+  const [sincInfo, setSincInfo] = useState<"ok" | "conteudo" | null>(null);
+  const [, setSincTick] = useState(0);
+  useEffect(() => {
+    const antes = itensNoManual.current;
+    if (textoManual == null || !itens || !antes || antes === itens) return;
+    const r = sincronizarTexto(textoManual, antes, itens);
+    if (!r.ok) return; // nao achou no texto (professor reescreveu): fica o aviso para refazer
+    // Mudou o CONTEUDO de algum card: isso o professor ajusta no texto (nao reescrevemos a frase dele)
+    const conteudoMudou = itens.some((n) => {
+      const v = antes.find((a) => a.componente === n.componente);
+      return v && v.conteudo.trim() !== n.conteudo.trim();
+    });
+    itensNoManual.current = itens;
+    if (r.texto !== textoManual) setTextoManual(r.texto);
+    setSincInfo(conteudoMudou ? "conteudo" : r.texto !== textoManual ? "ok" : null);
+    setSincTick((n) => n + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itens]);
   const cardsMudaram = textoManual != null && itensNoManual.current != null && itensNoManual.current !== itens;
   const pendentes = itens?.filter((i) => !i.habilidades.length).length ?? 0;
   const palpites = itens?.filter((i) => i.confianca === "baixa" && i.habilidades.length > 0).length ?? 0;
@@ -409,10 +429,12 @@ export default function RegistroAula({
       // Ja ha aulas do professor com texto editado: o texto vem no formato dele
       if (r.textoEstilo) {
         itensNoManual.current = r.itens;
+        setSincInfo(null);
         setTextoManual(r.textoEstilo);
         setTextoDoEstilo(true);
       } else {
         setTextoManual(null); // aula nova: texto montado pelos cards
+        setSincInfo(null);
         setTextoDoEstilo(false);
       }
     } catch (e) {
@@ -900,6 +922,7 @@ export default function RegistroAula({
                     if (textoManual == null) itensNoManual.current = itens;
                     setTextoManual(e.target.value);
                     setTextoDoEstilo(false);
+                    setSincInfo(null);
                   }}
                   className="w-full rounded-lg border border-indigo-300 bg-white px-3 py-2 text-sm leading-relaxed text-slate-800 focus:border-indigo-500 focus:outline-none"
                 />
@@ -916,14 +939,19 @@ export default function RegistroAula({
             {textoManual != null && !editandoTexto && (
               <p className={`mt-2 rounded-lg px-3 py-2 text-xs ${cardsMudaram ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-600"}`}>
                 {cardsMudaram
-                  ? "Você mudou os cards depois deste texto: ele não acompanha essas mudanças. "
-                  : textoDoEstilo
+                  ? "Você mudou os cards depois deste texto e não consegui atualizar o texto sozinho (ele foi reescrito). "
+                  : sincInfo === "conteudo"
+                    ? "As habilidades foram atualizadas no texto, mas o conteúdo de um card mudou: ajuste essa parte em ✏️ Editar texto ou "
+                    : sincInfo === "ok"
+                      ? "✓ As habilidades que você mudou nos cards foram atualizadas neste texto. "
+                      : textoDoEstilo
                     ? "✨ Texto no formato das suas aulas anteriores. "
                     : "Texto editado manualmente. "}
                 <button
                   onClick={() => {
                     setTextoManual(null);
                     setTextoDoEstilo(false);
+                    setSincInfo(null);
                     itensNoManual.current = null;
                   }}
                   className="font-medium text-indigo-700 underline hover:text-indigo-900"
