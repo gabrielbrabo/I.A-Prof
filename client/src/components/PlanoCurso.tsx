@@ -276,6 +276,12 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
   // Periodo salvo = igual ao que esta gravado no servidor
   const periodoSalvo = (p: PeriodoPlano) => !!planoId && salvos[p.numero] === assinatura(p);
   const tudoSalvo = !!planoId && periodos.length > 0 && periodos.every(periodoSalvo);
+  // Todos os periodos com habilidades e salvos: o envio de arquivos some (da para reabrir se precisar substituir)
+  const planoCompleto = tudoSalvo && periodos.every((p) => p.itens.length > 0);
+  const [mostrarEnvio, setMostrarEnvio] = useState(false);
+  useEffect(() => {
+    if (!planoCompleto) setMostrarEnvio(false);
+  }, [planoCompleto]);
 
   // Botao de salvar usado no topo e no final da revisao
   const botaoSalvar = (
@@ -364,7 +370,18 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
         </div>
       )}
 
-      {tipo && ano && uf && (
+      {tipo && ano && uf && planoCompleto && !mostrarEnvio && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <span>
+            ✓ <b>Plano completo:</b> {periodos.length === 1 ? "o período está salvo" : `todos os ${periodos.length} ${tipo === "semestre" ? "semestres" : `${tipo}s`} estão salvos`}.
+          </span>
+          <button type="button" onClick={() => setMostrarEnvio(true)} className="text-xs font-medium text-emerald-700 underline hover:text-emerald-900">
+            Enviar outro arquivo (substituir)
+          </button>
+        </div>
+      )}
+
+      {tipo && ano && uf && (!planoCompleto || mostrarEnvio) && (
         <>
           {/* Upload */}
           <div data-tour="pc-envio" className="rounded-xl border border-slate-200 bg-white p-4">
