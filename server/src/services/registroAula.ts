@@ -4,6 +4,7 @@ import { formatarComLimite } from "../utils/formatarRegistro";
 import { nomeAno } from "../utils/anos";
 import { PlanoCurso } from "../models/PlanoCurso";
 import { RegistroAula } from "../models/RegistroAula";
+import { chaveComponente, mesmoComponente } from "../utils/componente";
 import { env } from "../config/env";
 
 export interface HabilidadeEscolhida {
@@ -91,10 +92,16 @@ async function extrairItens(texto: string, ano: string, componentes: string[]): 
   });
   // Normaliza o componente (a IA pode variar maiusculas) e descarta invalidos
   const porNome = new Map(componentes.map((c) => [c.toLowerCase(), c]));
+  // mesmo componente com outro nome (ex.: "Ciências" x "Ciências da Natureza"): usa o primeiro da lista (o do plano)
+  const porChave = new Map<string, string>();
+  for (const c of componentes) if (!porChave.has(chaveComponente(c))) porChave.set(chaveComponente(c), c);
   return {
     abertura: (r.abertura || []).map((a) => String(a).trim()).filter(Boolean).slice(0, 8),
     itens: (r.itens || [])
-      .map((i) => ({ ...i, componente: porNome.get(String(i.componente).toLowerCase()) ?? "" }))
+      .map((i) => ({
+        ...i,
+        componente: porChave.get(chaveComponente(String(i.componente))) ?? porNome.get(String(i.componente).toLowerCase()) ?? "",
+      }))
       .filter((i) => i.componente && i.conteudo?.trim()),
   };
 }
@@ -276,7 +283,7 @@ export async function gerarRegistroAula(params: {
   // Candidatas = habilidades do plano do periodo, do mesmo componente
   const candidatas: CandidataPlano[][] = itens.map((it) =>
     ctx.itens
-      .filter((p) => p.componente === it.componente)
+      .filter((p) => mesmoComponente(p.componente, it.componente))
       .map((p) => ({
         codigo: p.codigo!,
         habilidade: p.habilidade!,

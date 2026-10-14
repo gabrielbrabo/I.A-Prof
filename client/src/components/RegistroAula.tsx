@@ -5,6 +5,7 @@ import { configApi, ErroAulaNoDia, InfoPlano, ItemRegistro, Opcao, registroApi, 
 import { planoApi, PlanoCurso } from "../api/planoCurso";
 import { ANOS, UFS, formatarComLimite } from "../lib/formatarRegistro";
 import { sincronizarTexto } from "../lib/sincronizarTexto";
+import { mesmoComponente } from "../lib/componente";
 import ItemCard from "./ItemCard";
 import { diarioApi, ErroAulaNoDiario, ErroReconectarDiario, nomeTurmaDiario, SituacaoDiario, TurmaDiario, VerificacaoDiario } from "../api/diario";
 import { ModalConflitoDiario } from "./Diario";
@@ -349,7 +350,7 @@ export default function RegistroAula({
           : {
               ...it,
               candidatas: habilidadesPeriodo
-                .filter((h) => h.componente === it.componente)
+                .filter((h) => mesmoComponente(h.componente, it.componente))
                 .map(({ codigo, habilidade, fonte }) => ({ codigo, habilidade, fonte })),
               habilidades: it.habilidades.map((h) => ({ ...h, fonte: habilidadesPeriodo.find((x) => x.codigo === h.codigo)?.fonte ?? h.fonte })),
             }
@@ -424,7 +425,19 @@ export default function RegistroAula({
       setAbertura(r.abertura ?? []);
       if (!r.itens.length && !(r.abertura ?? []).length)
         setErro("Não consegui identificar os componentes. Escreva, por exemplo: \"mat tabuada, port leitura de fábula\".");
-      setItens(r.itens);
+      // Card sem opcoes (nome do componente diferente do plano): preenche com as habilidades do mesmo componente no periodo
+      setItens(
+        r.itens.map((it) =>
+          it.candidatas.length
+            ? it
+            : {
+                ...it,
+                candidatas: habilidadesPeriodo
+                  .filter((h) => mesmoComponente(h.componente, it.componente))
+                  .map(({ codigo, habilidade, fonte }) => ({ codigo, habilidade, fonte })),
+              }
+        )
+      );
       onUsouIA?.();
       // Ja ha aulas do professor com texto editado: o texto vem no formato dele
       if (r.textoEstilo) {
@@ -675,7 +688,7 @@ export default function RegistroAula({
                 l?.map((it) => ({
                   ...it,
                   candidatas: habs
-                    .filter((h) => h.componente === it.componente)
+                    .filter((h) => mesmoComponente(h.componente, it.componente))
                     .map((h) => ({ codigo: h.codigo!, habilidade: h.habilidade!, fonte: h.recomposicao ? "RECOMPOSIÇÃO" : "PLANO" })),
                 })) ?? l
               );

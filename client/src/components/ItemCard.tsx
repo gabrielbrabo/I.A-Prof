@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { HabilidadeItem, ItemRegistro, Opcao } from "../api/registroAula";
+import { mesmoComponente } from "../lib/componente";
 
 interface Props {
   item: ItemRegistro;
@@ -29,10 +30,14 @@ export default function ItemCard({ item, habilidadesPeriodo, habilidadesOutros =
   // Outros periodos, do mesmo componente primeiro
   const outrosDoComponente = habilidadesOutros
     .filter((h) => !item.habilidades.some((x) => x.codigo === h.codigo))
-    .sort((a, b) => Number(b.componente === item.componente) - Number(a.componente === item.componente) || a.periodo - b.periodo);
+    .sort((a, b) => Number(mesmoComponente(b.componente, item.componente)) - Number(mesmoComponente(a.componente, item.componente)) || a.periodo - b.periodo);
 
   const escolhidos = new Set(item.habilidades.map((h) => h.codigo));
-  const opcoes = (resultados ?? item.candidatas).filter((o) => !escolhidos.has(o.codigo));
+  // Sem habilidade deste componente no periodo (ex.: nome do componente diferente no plano):
+  // em vez de travar, mostra TODAS as habilidades do periodo para o professor escolher
+  const semDoComponente = !resultados && !item.candidatas.length;
+  const base: Array<Opcao & { componente?: string }> = resultados ?? (item.candidatas.length ? item.candidatas : habilidadesPeriodo);
+  const opcoes = base.filter((o) => !escolhidos.has(o.codigo));
   const cheio = item.habilidades.length >= MAX_HABILIDADES;
   // Palpite da I.A (texto generico): o card pisca ate o professor conferir
   const palpite = item.confianca === "baixa" && item.habilidades.length > 0;
@@ -51,7 +56,7 @@ export default function ItemCard({ item, habilidadesPeriodo, habilidadesOutros =
 
   function adicionar(codigo: string) {
     if (!codigo || cheio || escolhidos.has(codigo)) return;
-    const op = [...(resultados ?? []), ...item.candidatas, ...habilidadesOutros].find((o) => o.codigo === codigo);
+    const op = [...(resultados ?? []), ...item.candidatas, ...habilidadesPeriodo, ...habilidadesOutros].find((o) => o.codigo === codigo);
     if (!op) return;
     atualizar([...item.habilidades, { codigo: op.codigo, habilidade: op.habilidade, fonte: op.fonte }]);
   }
@@ -65,7 +70,7 @@ export default function ItemCard({ item, habilidadesPeriodo, habilidadesOutros =
     const termos = sem(busca).split(/\s+/).filter(Boolean);
     const achadas = [...habilidadesPeriodo, ...(verOutros ? habilidadesOutros : [])]
       .filter((h) => termos.every((t) => sem(`${h.codigo} ${h.habilidade} ${h.componente}`).includes(t)))
-      .sort((a, b) => Number(b.componente === item.componente) - Number(a.componente === item.componente));
+      .sort((a, b) => Number(mesmoComponente(b.componente, item.componente)) - Number(mesmoComponente(a.componente, item.componente)));
     setResultados(achadas.map(({ codigo, habilidade, fonte }) => ({ codigo, habilidade, fonte })));
   }
 
@@ -141,15 +146,31 @@ export default function ItemCard({ item, habilidadesPeriodo, habilidadesOutros =
         </p>
       )}
 
+      {semDoComponente && opcoes.length > 0 && (
+        <p className="mb-1 text-[11px] text-amber-700">
+          Não achei habilidades de <b>{item.componente}</b> no plano deste {nomePeriodo}: a lista mostra todas as matérias.
+        </p>
+      )}
       <select
         value=""
         disabled={cheio || !opcoes.length}
         onChange={(e) => adicionar(e.target.value)}
         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-400"
       >
-        <option value="">{cheio ? `Máximo de ${MAX_HABILIDADES} habilidades` : resultados ? `+ Adicionar (${opcoes.length} encontradas)` : "+ Adicionar habilidade do plano"}</option>
+        <option value="">
+          {cheio
+            ? `Máximo de ${MAX_HABILIDADES} habilidades`
+            : !opcoes.length
+              ? "Nenhuma habilidade no plano deste período"
+              : resultados
+                ? `+ Adicionar (${opcoes.length} encontradas)`
+                : semDoComponente
+                  ? "+ Adicionar habilidade do plano (todas as matérias)"
+                  : "+ Adicionar habilidade do plano"}
+        </option>
         {opcoes.map((o) => (
           <option key={o.codigo} value={o.codigo}>
+            {semDoComponente && o.componente ? `[${o.componente}] ` : ""}
             {o.codigo} {periodoDe(o.codigo) ? `[${periodoDe(o.codigo)}º ${nomePeriodo}]` : ""} {o.fonte === "RECOMPOSIÇÃO" ? "[recomposição]" : ""} — {o.habilidade.slice(0, 110)}
             {o.habilidade.length > 110 ? "…" : ""}
           </option>
