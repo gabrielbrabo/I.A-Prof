@@ -92,7 +92,9 @@ export default function RegistroAula({
   // Professor: comeca com o nome da conta; o professor pode editar (fica lembrado na conta dele)
   // null = ainda nao editou (usa o nome da conta)
   const [professorEdit, setProfessorEdit] = useState<string | null>(() => editando?.professor ?? (lerPref("professor", "\u0000") === "\u0000" ? null : lerPref("professor", "")));
-  const professor = professorEdit ?? professorNome ?? "";
+  // Conectado ao D.E.V: o nome da aula e o nome do professor no D.E.V (ignora o nome do I.A Prof)
+  const nomeDev = diario?.conectado && diario.nome ? diario.nome : null;
+  const professor = nomeDev ?? professorEdit ?? professorNome ?? "";
   // Serie e UF comecam vazias ate o professor escolher a primeira vez (depois ficam lembradas)
   const [ano, setAno] = useState(() => editando?.ano ?? lerPref("ano", ""));
   // Turma: depois da primeira aula salva, o nome fica guardado para aquela serie (preenche sozinho)
@@ -548,8 +550,17 @@ export default function RegistroAula({
       {/* Cabecalho da turma */}
       <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:p-4 lg:grid-cols-7">
         <div className="col-span-2 min-w-0 sm:col-span-1 lg:col-span-2">
-          <label className="text-xs font-medium text-slate-500">Professor(a)</label>
-          <input className={campo} value={professor} onChange={(e) => mudar(setProfessorEdit as (v: string) => void, "professor")(e.target.value)} />
+          <div className="flex items-center justify-between gap-1">
+            <label className="text-xs font-medium text-slate-500">Professor(a)</label>
+            {nomeDev && <span className="text-[10px] font-medium text-emerald-700">nome do D.E.V</span>}
+          </div>
+          <input
+            className={`${campo} ${nomeDev ? "cursor-not-allowed bg-slate-50 text-slate-600" : ""}`}
+            value={professor}
+            readOnly={!!nomeDev}
+            title={nomeDev ? "Conectado ao D.E.V: o nome usado é o do seu cadastro no D.E.V" : undefined}
+            onChange={(e) => !nomeDev && mudar(setProfessorEdit as (v: string) => void, "professor")(e.target.value)}
+          />
         </div>
         <div className="min-w-0">
           <label className="text-xs font-medium text-slate-500">Série</label>

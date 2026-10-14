@@ -21,11 +21,29 @@ async function chamar<T>(metodo: "GET" | "POST", caminho: string, corpo?: unknow
       body: corpo ? JSON.stringify(corpo) : undefined,
       signal: AbortSignal.timeout(60000), // Diario no plano gratis pode estar "acordando"
     });
-  } catch {
-    throw new ErroDiario("Não foi possível falar com o Diário escolar agora. Tente de novo em instantes.", 502);
+  } catch (e) {
+    // Mostra o motivo real (sem expor a chave) para facilitar achar o problema de configuracao
+    const err = e as { name?: string; cause?: { code?: string; message?: string }; message?: string };
+    const codigo = err.cause?.code || err.name || "";
+    console.error(`[diario] falha ao chamar ${env.diario.url}/integracao/iaprof${caminho.split("?")[0]}:`, codigo, err.cause?.message || err.message);
+    const motivo =
+      codigo === "TimeoutError" || codigo === "AbortError"
+        ? "o D.E.V demorou demais para responder (pode estar iniciando)."
+        : codigo === "ENOTFOUND" || codigo === "EAI_AGAIN"
+          ? "o endereço do D.E.V (DIARIO_API_URL) não foi encontrado."
+          : codigo === "ECONNREFUSED"
+            ? "o servidor do D.E.V recusou a conexão (está desligado ou o endereço/porta está errado)."
+            : codigo.startsWith("ERR_TLS") || codigo.includes("CERT")
+              ? "problema de certificado (https) no endereço do D.E.V."
+              : `erro de conexão (${codigo || "desconhecido"}).`;
+    throw new ErroDiario(`Não foi possível falar com o D.E.V: ${motivo}`, 502);
   }
   const dados = (await resp.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!resp.ok) throw new ErroDiario(String(dados.msg || `Erro no Diário (${resp.status})`), resp.status, dados);
+  if (resp.status === 404 && !dados.msg) {
+    // rota nao existe: D.E.V sem a atualizacao da integracao ou DIARIO_API_URL apontando para o lugar errado
+    throw new ErroDiario("O D.E.V respondeu, mas não tem a integração com o I.A Prof (atualize o servidor do D.E.V ou confira o DIARIO_API_URL).", 502);
+  }
+  if (!resp.ok) throw new ErroDiario(String(dados.msg || `Erro no D.E.V (${resp.status})`), resp.status, dados);
   return dados as T;
 }
 
