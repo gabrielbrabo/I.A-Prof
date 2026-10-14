@@ -162,7 +162,7 @@ export default function RegistroAula({
       .catch((e) => {
         if (!ativo) return;
         if (e instanceof ErroReconectarDiario) setSituacaoDiario((s) => (s ? { ...s, conectado: false, nome: null, escolas: [] } : s));
-        setErroTurmasDiario(e instanceof Error ? e.message : "Erro ao buscar turmas do Diário");
+        setErroTurmasDiario(e instanceof Error ? e.message : "Erro ao buscar turmas do D.E.V");
         setTurmasDiario(null);
       });
     return () => {
@@ -204,7 +204,7 @@ export default function RegistroAula({
     try {
       const r = await diarioApi.enviar(registroId, modo);
       const como = r.acao === "substituida" ? " (substituiu a aula que estava lá)" : r.acao === "juntada" ? " (juntada à aula que estava lá)" : "";
-      return `${aviso} Também foi enviada ao Diário escolar${como}.`;
+      return `${aviso} Também foi enviada ao D.E.V${como}.`;
     } catch (e) {
       if (e instanceof ErroAulaNoDiario) {
         setConflitoDiario({ registroId, atual: e.descricaoAtual, aviso });
@@ -212,7 +212,7 @@ export default function RegistroAula({
       }
       if (e instanceof ErroReconectarDiario) setSituacaoDiario((s) => (s ? { ...s, conectado: false, nome: null, escolas: [] } : s));
       const msg = e instanceof Error ? e.message : "erro desconhecido";
-      return `${aviso} ⚠️ Não foi enviada ao Diário: ${msg} Você pode enviar depois em Aulas salvas.`;
+      return `${aviso} ⚠️ Não foi enviada ao D.E.V: ${msg} Você pode enviar depois em Aulas salvas.`;
     }
   }
 
@@ -221,7 +221,7 @@ export default function RegistroAula({
     const { registroId, aviso } = conflitoDiario;
     if (!modo) {
       setConflitoDiario(null);
-      onFecharEdicao?.(`${aviso} Não foi enviada ao Diário (você pode enviar depois em Aulas salvas).`);
+      onFecharEdicao?.(`${aviso} Não foi enviada ao D.E.V (você pode enviar depois em Aulas salvas).`);
       return;
     }
     setEnviandoDiario(true);
@@ -644,14 +644,14 @@ export default function RegistroAula({
                   {t.papel === "ED_FISICA" ? " (Ed. Física)" : ""}
                 </option>
               ))}
-              <option value="outra">Outra (não enviar ao Diário)</option>
+              <option value="outra">Outra (não enviar ao D.E.V)</option>
             </select>
           ) : (
             <input className={campo} value={turma} placeholder="ex.: 4º A" onChange={(e) => setTurma(e.target.value)} />
           )}
           {usaTurmasDiario && diarioTurmaId === "outra" && (
             <button type="button" onClick={() => escolherTurmaDiario("")} className="mt-0.5 text-[11px] text-indigo-600 hover:underline">
-              usar turma do Diário
+              usar turma do D.E.V
             </button>
           )}
           {erroTurmasDiario && <p className="mt-0.5 text-[11px] text-rose-600">{erroTurmasDiario}</p>}
@@ -707,17 +707,17 @@ export default function RegistroAula({
       {/* Aviso do Diario escolar para a turma e data escolhidas */}
       {verifDiario && !verifDiario.podeRegistrar && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          📒 <b>Diário escolar:</b> {verifDiario.motivo} A aula pode ser salva aqui, mas não será enviada ao Diário nesta data.
+          📒 <b>D.E.V:</b> {verifDiario.motivo} A aula pode ser salva aqui, mas não será enviada ao D.E.V nesta data.
         </div>
       )}
       {verifDiario?.existe && !ehEstaAulaNoDiario && (
         <div className="rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <p>
-            📒 <b>Já existe aula registrada no Diário em {data.split("-").reverse().join("/")}</b>
+            📒 <b>Já existe aula registrada no D.E.V em {data.split("-").reverse().join("/")}</b>
             {turma.trim() ? ` para a turma ${turma.trim()}` : ""}. Ao salvar, você escolhe se substitui ou junta com a aula de lá.
           </p>
           <button type="button" onClick={() => setVerDescricaoDiario((v) => !v)} className="mt-1 text-xs font-medium text-amber-800 underline">
-            {verDescricaoDiario ? "esconder aula do Diário" : "ver aula que está no Diário"}
+            {verDescricaoDiario ? "esconder aula do D.E.V" : "ver aula que está no D.E.V"}
           </button>
           {verDescricaoDiario && (
             <p className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-lg bg-white px-3 py-2 text-xs leading-relaxed text-slate-700">{verifDiario.descricao}</p>
@@ -726,7 +726,7 @@ export default function RegistroAula({
       )}
       {verifDiario?.existe && ehEstaAulaNoDiario && (
         <div className="rounded-lg bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700">
-          📒 Esta aula já está no Diário. Se você alterar e salvar, ela será atualizada lá.
+          📒 Esta aula já está no D.E.V. Se você alterar e salvar, ela será atualizada lá.
         </div>
       )}
 
@@ -1010,7 +1010,7 @@ export default function RegistroAula({
                     gravarPref("enviarDiario", e.target.checked ? "1" : "0");
                   }}
                 />
-                Enviar também para o <b>Diário escolar</b> ({turma})
+                Enviar também para o <b>D.E.V</b> ({turma})
               </label>
             )}
             <div className="mt-4 flex flex-wrap gap-2 sm:justify-end">

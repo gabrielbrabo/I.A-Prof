@@ -39,7 +39,7 @@ export async function status(req: Request, res: Response) {
 const conectarSchema = z.object({ cpf: z.string().min(11).max(20), senha: z.string().min(1).max(200) });
 export async function conectar(req: Request, res: Response) {
   const p = conectarSchema.safeParse(req.body);
-  if (!p.success) return res.status(400).json({ message: "Informe o CPF e a senha do Diário." });
+  if (!p.success) return res.status(400).json({ message: "Informe o CPF e a senha do D.E.V." });
   try {
     const r = await diario.vincular(p.data.cpf, p.data.senha);
     await Usuario.updateOne({ _id: req.usuarioId }, { $set: { diario: { token: r.token, nome: r.nome, escolas: r.escolas ?? [], conectadoEm: new Date() } } });
@@ -59,7 +59,7 @@ export async function desconectar(req: Request, res: Response) {
 // GET /api/diario/turmas?ano=2026
 export async function turmas(req: Request, res: Response) {
   const token = await tokenDo(req.usuarioId!);
-  if (!token) return res.status(409).json({ message: "Conecte sua conta do Diário escolar.", reconectar: true });
+  if (!token) return res.status(409).json({ message: "Conecte sua conta do D.E.V.", reconectar: true });
   try {
     const r = await diario.turmas(token, typeof req.query.ano === "string" ? req.query.ano : undefined);
     res.json(r.turmas);
@@ -74,7 +74,7 @@ export async function verificar(req: Request, res: Response) {
   const data = String(req.query.data || "");
   if (!/^[a-f0-9]{24}$/i.test(turma) || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return res.status(400).json({ message: "Dados inválidos" });
   const token = await tokenDo(req.usuarioId!);
-  if (!token) return res.status(409).json({ message: "Conecte sua conta do Diário escolar.", reconectar: true });
+  if (!token) return res.status(409).json({ message: "Conecte sua conta do D.E.V.", reconectar: true });
   try {
     res.json(await diario.verificarAula(token, turma, data));
   } catch (e) {
@@ -91,11 +91,11 @@ export async function enviar(req: Request, res: Response) {
   const p = enviarSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ message: "Dados inválidos" });
   const token = await tokenDo(req.usuarioId!);
-  if (!token) return res.status(409).json({ message: "Conecte sua conta do Diário escolar.", reconectar: true });
+  if (!token) return res.status(409).json({ message: "Conecte sua conta do D.E.V.", reconectar: true });
 
   const reg = await RegistroAula.findOne({ _id: p.data.registroId, usuario: req.usuarioId });
   if (!reg) return res.status(404).json({ message: "Aula não encontrada" });
-  if (!reg.diarioTurmaId) return res.status(400).json({ message: "Escolha a turma do Diário nesta aula antes de enviar." });
+  if (!reg.diarioTurmaId) return res.status(400).json({ message: "Escolha a turma do D.E.V nesta aula antes de enviar." });
 
   try {
     const r = await diario.registrarAula(token, {

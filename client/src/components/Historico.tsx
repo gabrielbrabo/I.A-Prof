@@ -19,10 +19,10 @@ export default function Historico({ atualizar, onAbrir }: { atualizar: number; o
     try {
       const res = await diarioApi.enviar(r._id, modo);
       setLista((l) => l.map((x) => (x._id === r._id ? { ...x, diarioEnviadoEm: res.enviadoEm } : x)));
-      setMsgDiario({ id: r._id, ok: true, texto: "Enviada ao Diário escolar." });
+      setMsgDiario({ id: r._id, ok: true, texto: "Enviada ao D.E.V." });
     } catch (e) {
       if (e instanceof ErroAulaNoDiario) setConflito({ r, atual: e.descricaoAtual });
-      else setMsgDiario({ id: r._id, ok: false, texto: e instanceof Error ? e.message : "Erro ao enviar ao Diário" });
+      else setMsgDiario({ id: r._id, ok: false, texto: e instanceof Error ? e.message : "Erro ao enviar ao D.E.V" });
     } finally {
       setEnviando(null);
     }
@@ -75,8 +75,8 @@ export default function Historico({ atualizar, onAbrir }: { atualizar: number; o
               📅 {r.data.split("-").reverse().join("/")} · {ANOS.find((a) => a.valor === r.ano)?.nome ?? r.ano}
               {r.turma ? ` · Turma ${r.turma}` : ""}
               {r.diarioEnviadoEm && (
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700" title="Esta aula já está no Diário escolar">
-                  ✓ no Diário
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700" title="Esta aula já está no D.E.V">
+                  ✓ no D.E.V
                 </span>
               )}
               {aConferir > 0 && (
@@ -96,10 +96,10 @@ export default function Historico({ atualizar, onAbrir }: { atualizar: number; o
                 <button
                   onClick={() => enviarDiario(r)}
                   disabled={enviando === r._id || aConferir > 0}
-                  title={aConferir > 0 ? "Confira os palpites antes de enviar" : "Enviar esta aula para o Diário escolar"}
+                  title={aConferir > 0 ? "Confira os palpites antes de enviar" : "Enviar esta aula para o D.E.V"}
                   className="font-medium text-emerald-700 hover:underline disabled:opacity-50"
                 >
-                  {enviando === r._id ? "Enviando…" : "📒 Enviar ao Diário"}
+                  {enviando === r._id ? "Enviando…" : "📒 Enviar ao D.E.V"}
                 </button>
               )}
               <button onClick={() => copiar(r)} className="font-medium text-indigo-600 hover:underline">

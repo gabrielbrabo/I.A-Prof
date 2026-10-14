@@ -133,6 +133,11 @@ export default function Tour({ passos, onFim }: { passos: PassoTour[]; onFim: ()
 // Passos do tour da primeira entrada (tela Gerar aula)
 export const PASSOS_INICIO: PassoTour[] = [
   {
+    alvo: "menu",
+    titulo: "O menu",
+    texto: "Toque em ☰ para abrir o menu: Plano de aulas (Gerar aula, Plano de curso, Aulas salvas), Minha assinatura, Como usar, Instalar app e Sair.",
+  },
+  {
     alvo: "ferramenta-aulas",
     titulo: "Plano de aulas",
     texto: "Esta é a ferramenta de aulas. Dentro dela ficam os botões Gerar aula, Plano de curso e Aulas salvas.",

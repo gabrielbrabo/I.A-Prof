@@ -63,6 +63,13 @@ function Painel() {
   const [modalDiario, setModalDiario] = useState(false);
   // "Como usar" e tour guiado (o tour aparece sozinho na primeira entrada de cada professor)
   const [comoUsar, setComoUsar] = useState(false);
+  const [menuAberto, setMenuAberto] = useState(false);
+  useEffect(() => {
+    if (!menuAberto) return;
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setMenuAberto(false);
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [menuAberto]);
   const [tour, setTour] = useState(false);
   useEffect(() => {
     if (!usuario || lerPref("tourVisto", "") === "1") return;
@@ -125,6 +132,10 @@ function Painel() {
     window.scrollTo({ top: 0 });
   };
   const alertaAssinatura = situacao?.acesso === "bloqueado" ? situacao.motivo : null;
+  const irMenu = (t: Tela) => {
+    ir(t);
+    setMenuAberto(false);
+  };
   const mudarTema = (novo: "claro" | "escuro") => {
     setTema(novo);
     gravarPrefGlobal("tema", novo);
@@ -208,8 +219,26 @@ function Painel() {
                 </button>
               )}
             </span>
-            <button onClick={sair} className="shrink-0 rounded border-l border-slate-200 px-2 py-1.5 pl-3 hover:bg-slate-100 hover:text-rose-600">
+            <button onClick={sair} className="hidden shrink-0 rounded border-l border-slate-200 px-2 py-1.5 pl-3 hover:bg-slate-100 hover:text-rose-600 md:inline-block">
               Sair
+            </button>
+            {/* Celular: tema fora do menu + botao do menu */}
+            <button
+              onClick={() => mudarTema(tema === "escuro" ? "claro" : "escuro")}
+              aria-label={tema === "escuro" ? "Usar tema claro" : "Usar tema escuro"}
+              title={tema === "escuro" ? "Usar tema claro" : "Usar tema escuro"}
+              className="ml-1 shrink-0 rounded-lg px-2 py-1.5 text-lg leading-none hover:bg-slate-100 md:hidden"
+            >
+              {tema === "escuro" ? "☀️" : "🌙"}
+            </button>
+            <button
+              onClick={() => setMenuAberto(true)}
+              data-tour="menu"
+              aria-label="Abrir menu"
+              className="relative shrink-0 rounded-lg px-2 py-1.5 text-2xl leading-none text-slate-700 hover:bg-slate-100 md:hidden"
+            >
+              ☰
+              {(faltaPlano || alertaAssinatura) && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-amber-500" />}
             </button>
           </span>
         </div>
@@ -239,51 +268,83 @@ function Painel() {
         )}
       </header>
 
-      {/* Celular: barra de botoes fixa embaixo (ferramentas + itens gerais) */}
-      <nav
-        className="fixed inset-x-0 bottom-0 z-30 flex border-t border-slate-200 bg-white md:hidden"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-        aria-label="Menu principal"
-      >
-        {[
-          ...FERRAMENTAS.map((f) => ({
-            chave: f.id,
-            icone: f.icone,
-            rotulo: f.curto,
-            ativo: ferramentaAtual?.id === f.id,
-            alerta: f.itens.map((i) => alertas[i.id]).find(Boolean),
-            tour: `ferramenta-${f.id}`,
-            acao: () => abrirFerramenta(f),
-          })),
-          { chave: "assinatura", icone: "💳", rotulo: "Assinatura", ativo: aba === "assinatura", alerta: alertaAssinatura, tour: "aba-assinatura", acao: () => ir("assinatura") },
-          { chave: "ajuda", icone: "❓", rotulo: "Como usar", ativo: false, alerta: null, tour: "ajuda", acao: () => setComoUsar(true) },
-          {
-            chave: "tema",
-            icone: tema === "escuro" ? "☀️" : "🌙",
-            rotulo: tema === "escuro" ? "Claro" : "Escuro",
-            ativo: false,
-            alerta: null,
-            tour: "tema",
-            acao: () => mudarTema(tema === "escuro" ? "claro" : "escuro"),
-          },
-        ].map((b) => (
-          <button
-            key={b.chave}
-            data-tour={b.tour}
-            onClick={b.acao}
-            className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 pb-2 pt-1.5 text-[11px] font-medium leading-tight ${b.ativo ? "text-indigo-700" : "text-slate-500"}`}
+      {/* Celular: menu hamburguer (abre pela direita) */}
+      {menuAberto && (
+        <div className="fixed inset-0 z-40 md:hidden" onClick={() => setMenuAberto(false)}>
+          <div className="absolute inset-0 bg-slate-900/50" />
+          <aside
+            className="absolute inset-y-0 right-0 flex w-72 max-w-[85vw] flex-col overflow-y-auto bg-white p-3 shadow-xl"
+            style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+            onClick={(e) => e.stopPropagation()}
+            aria-label="Menu"
           >
-            <span className={`relative rounded-full px-3 py-0.5 text-base ${b.ativo ? "bg-indigo-50" : ""}`}>
-              {b.icone}
-              {selo(b.alerta)}
-            </span>
-            <span className="w-full truncate text-center">{b.rotulo}</span>
-          </button>
-        ))}
-        <InstalarApp variante="barra" />
-      </nav>
+            <div className="mb-2 flex items-start justify-between gap-2 px-1">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-800">{usuario?.nome ?? ""}</p>
+                <p className="truncate text-xs text-slate-500">{usuario?.email ?? ""}</p>
+              </div>
+              <button onClick={() => setMenuAberto(false)} aria-label="Fechar menu" className="rounded-lg px-2 py-0.5 text-2xl leading-none text-slate-400 hover:bg-slate-100">
+                ×
+              </button>
+            </div>
+            <nav className="flex flex-1 flex-col gap-1" aria-label="Menu principal">
+              {FERRAMENTAS.map((f) => (
+                <div key={f.id}>
+                  <p className="flex items-center gap-2 px-3 pb-1 pt-2 text-sm font-semibold text-slate-800">
+                    <span className="text-base">{f.icone}</span>
+                    {f.rotulo}
+                  </p>
+                  <div className="ml-4 flex flex-col gap-0.5 border-l border-slate-200 pl-2">
+                    {f.itens.map((i) => (
+                      <button
+                        key={i.id}
+                        onClick={() => irMenu(i.id)}
+                        className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium ${
+                          aba === i.id ? "bg-indigo-600 text-white" : "text-slate-700 hover:bg-slate-100"
+                        }`}
+                      >
+                        <span>{i.icone}</span>
+                        <span className="flex-1">{i.rotulo}</span>
+                        {selo(alertas[i.id], false)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <div className="my-2 border-t border-slate-200" />
+              <button
+                onClick={() => irMenu("assinatura")}
+                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium ${
+                  aba === "assinatura" ? "bg-indigo-600 text-white" : "text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                <span className="text-base">💳</span>
+                <span className="flex-1">Minha assinatura</span>
+                {selo(alertaAssinatura, false)}
+              </button>
+              <button
+                onClick={() => {
+                  setMenuAberto(false);
+                  setComoUsar(true);
+                }}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-100"
+              >
+                <span className="text-base">❓</span>
+                <span className="flex-1">Como usar</span>
+              </button>
+              <InstalarApp variante="menu" onClique={() => setMenuAberto(false)} />
+              <div className="mt-auto border-t border-slate-200 pt-2">
+                <button onClick={sair} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-rose-600 hover:bg-rose-50">
+                  <span className="text-base">🚪</span>
+                  <span className="flex-1">Sair</span>
+                </button>
+              </div>
+            </nav>
+          </aside>
+        </div>
+      )}
 
-      <main className="mx-auto max-w-5xl px-3 pb-24 pt-4 sm:px-4 md:py-6">
+      <main className="mx-auto max-w-5xl px-3 pb-10 pt-4 sm:px-4 md:py-6">
         {/* Uso de I.A no mes (barra no topo do Gerar aula) */}
         {situacao && aba === "registro" && (
           <div className="mb-3 rounded-lg border border-slate-200 bg-white px-3 py-2" data-tour="uso">

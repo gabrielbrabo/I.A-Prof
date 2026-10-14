@@ -2,8 +2,8 @@ import { useInstalarApp } from "../lib/useInstalarApp";
 
 // variante "cartao": tela de login/cadastro (destaque embaixo do formulario)
 // variante "topo": botao compacto no cabecalho do app
-// variante "barra": botao da barra de baixo (celular)
-export default function InstalarApp({ variante }: { variante: "cartao" | "topo" | "barra" }) {
+// variante "menu": item do menu hamburguer (celular)
+export default function InstalarApp({ variante, onClique }: { variante: "cartao" | "topo" | "menu"; onClique?: () => void }) {
   const { disponivel, instalar, mostrarIos, fecharIos } = useInstalarApp();
   if (!disponivel) return null;
 
@@ -22,15 +22,18 @@ export default function InstalarApp({ variante }: { variante: "cartao" | "topo" 
           </span>
           <span className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white">Instalar</span>
         </button>
-      ) : variante === "barra" ? (
+      ) : variante === "menu" ? (
         <button
           type="button"
-          onClick={instalar}
+          onClick={() => {
+            onClique?.();
+            instalar();
+          }}
           data-tour="instalar"
-          className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 pb-2 pt-1.5 text-[11px] font-medium leading-tight text-slate-500"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-100"
         >
-          <span className="rounded-full px-3 py-0.5 text-base">📲</span>
-          <span className="w-full truncate text-center">Instalar</span>
+          <span className="text-base">📲</span>
+          <span className="flex-1">Instalar app</span>
         </button>
       ) : (
         <button

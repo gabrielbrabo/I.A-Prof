@@ -61,7 +61,7 @@ const SECOES: Secao[] = [
   {
     id: "dev",
     icone: "📒",
-    titulo: "Diário D.E.V",
+    titulo: "D.E.V",
     passos: [
       "Clique em “Conectar ao D.E.V” (embaixo do seu nome, no topo) e entre com o CPF e a senha do D.E.V.",
       "No campo Turma, escolha a turma da lista do D.E.V.",

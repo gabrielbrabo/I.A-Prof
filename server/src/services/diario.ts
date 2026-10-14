@@ -8,7 +8,7 @@ export class ErroDiario extends Error {
 }
 
 async function chamar<T>(metodo: "GET" | "POST", caminho: string, corpo?: unknown, token?: string): Promise<T> {
-  if (!diarioLigado()) throw new ErroDiario("Integração com o Diário escolar não configurada no servidor.", 503);
+  if (!diarioLigado()) throw new ErroDiario("Integração com o D.E.V não configurada no servidor.", 503);
   let resp: Response;
   try {
     resp = await fetch(`${env.diario.url}/integracao/iaprof${caminho}`, {

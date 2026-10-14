@@ -50,10 +50,10 @@ export function ModalConectarDiario({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={() => !enviando && onFechar()}>
       <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <p className="text-base font-semibold text-slate-800">📒 D.E.V — Diário escolar</p>
+        <p className="text-base font-semibold text-slate-800">📒 D.E.V</p>
         {!situacao.disponivel ? (
           <>
-            <p className="mt-2 text-sm text-slate-700">A conexão com o Diário escolar ainda não está disponível.</p>
+            <p className="mt-2 text-sm text-slate-700">A conexão com o D.E.V ainda não está disponível.</p>
             <p className="mt-1 text-xs text-slate-500">
               Configuração do servidor do I.A Prof: falta <code>DIARIO_API_URL</code> e/ou <code>DIARIO_CHAVE</code> (reinicie o servidor depois de configurar).
             </p>
@@ -69,7 +69,7 @@ export function ModalConectarDiario({
               Conectado como <b>{situacao.nome}</b>
             </p>
             {situacao.escolas.length > 0 && <p className="text-xs text-slate-500">{situacao.escolas.join(" · ")}</p>}
-            <p className="mt-3 text-xs text-slate-500">As aulas salvas com uma turma do Diário são enviadas para o seu diário de classe.</p>
+            <p className="mt-3 text-xs text-slate-500">As aulas salvas com uma turma do D.E.V são enviadas para o seu diário de classe.</p>
             {erro && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{erro}</p>}
             <div className="mt-4 flex justify-between gap-2">
               <button onClick={desconectar} disabled={enviando} className="rounded-lg px-3 py-2 text-sm text-rose-600 hover:bg-rose-50 disabled:opacity-50">
@@ -83,17 +83,17 @@ export function ModalConectarDiario({
         ) : (
           <form onSubmit={conectar}>
             <p className="mt-1 text-xs text-slate-500">
-              Entre com o mesmo CPF e senha que você usa no Diário. Assim o I.A Prof mostra suas turmas e envia a aula pronta para o diário.
+              Entre com o mesmo CPF e senha que você usa no D.E.V. Assim o I.A Prof mostra suas turmas e envia a aula pronta para o diário.
             </p>
             <label className="mt-3 block text-xs font-medium text-slate-500">
               CPF
               <input className={campo} inputMode="numeric" autoComplete="username" value={cpf} onChange={(e) => setCpf(e.target.value)} required />
             </label>
             <label className="mt-2 block text-xs font-medium text-slate-500">
-              Senha do Diário
+              Senha do D.E.V
               <input type="password" className={campo} autoComplete="current-password" value={senha} onChange={(e) => setSenha(e.target.value)} required />
             </label>
-            <p className="mt-2 text-[11px] text-slate-400">Sua senha do Diário não fica guardada no I.A Prof.</p>
+            <p className="mt-2 text-[11px] text-slate-400">Sua senha do D.E.V não fica guardada no I.A Prof.</p>
             {erro && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{erro}</p>}
             <div className="mt-4 flex justify-end gap-2">
               <button type="button" onClick={onFechar} className="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">
