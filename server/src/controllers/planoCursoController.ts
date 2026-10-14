@@ -110,6 +110,17 @@ export async function extrair(req: Request, res: Response) {
       );
       const itens = await montarItens(doPeriodo, p.data.uf || null);
       const capturados = new Set(itens.map((i) => i.codigo));
+      // Arquivo com VARIOS periodos enviado como "um arquivo de cada periodo": provavelmente e o plano do ano inteiro
+      const modoErrado =
+        periodosDoc.length >= 2
+          ? {
+              sugerido: "todos",
+              mensagem: `Este arquivo parece ter o plano do ano inteiro (${periodosDoc
+                .sort((a, b) => a - b)
+                .map((n) => `${n}º`)
+                .join(", ")} ${nomeUnid}). Se for isso, escolha "Um arquivo com o plano do ano inteiro" e envie de novo.`,
+            }
+          : null;
       const avisoPeriodo = deOutroPeriodo.length
         ? `O documento também tem habilidades de outro(s) ${nomeUnid}(s) (${periodosDoc.filter((n) => n !== periodoAlvo).map((n) => `${n}º`).join(", ")}). Só entraram as do ${periodoAlvo}º; ${deOutroPeriodo.length} ficaram de fora: ${deOutroPeriodo.join(", ")}.`
         : null;
@@ -120,6 +131,7 @@ export async function extrair(req: Request, res: Response) {
         naoIdentificados: 0,
         semTexto,
         avisoPeriodo,
+        modoErrado,
         recuperados: itens.filter((i) => i.conferir).map((i) => i.codigo),
         ...conferir(capturados, deOutroPeriodo),
         arquivos: nomes,
@@ -140,7 +152,12 @@ export async function extrair(req: Request, res: Response) {
       const semPeriodo = [...new Set(achados.filter((x) => !comPeriodo.includes(x)).map((x) => x.codigo))];
       if (!comPeriodo.length) {
         return res.status(422).json({
-          message: `O documento não indica em qual ${tipo} está cada habilidade. O arquivo precisa ter títulos como "1º ${tipo}", "2º ${tipo}" antes das habilidades de cada período. Outra opção: use "Um plano por período" e envie um arquivo para cada ${tipo}.`,
+          message: `O documento não indica em qual ${tipo} está cada habilidade. O arquivo precisa ter títulos como "1º ${tipo}", "2º ${tipo}" antes das habilidades de cada período. Outra opção: use "Um arquivo com o plano de cada período" e envie um arquivo para cada ${tipo}.`,
+          // sem nenhum periodo marcado: quase sempre e o arquivo de UM periodo enviado no lugar do ano inteiro
+          modoErrado: {
+            sugerido: "periodo",
+            mensagem: `Este arquivo parece ser de um ${tipo} só (não tem "1º ${tipo}", "2º ${tipo}"…). Se você tem um arquivo para cada ${tipo}, escolha "Um arquivo com o plano de cada período".`,
+          },
         });
       }
       const periodos = [];
@@ -149,7 +166,16 @@ export async function extrair(req: Request, res: Response) {
         if (itens.length) periodos.push({ numero: n, itens });
       }
       const capturados = new Set(periodos.flatMap((x) => x.itens.map((i) => i.codigo)));
+      // Ano inteiro, mas o arquivo so tem UM periodo: provavelmente e o arquivo de um periodo
+      const modoErrado =
+        qtd > 1 && periodos.length === 1
+          ? {
+              sugerido: "periodo",
+              mensagem: `Este arquivo parece ter só o ${periodos[0].numero}º ${tipo}. Se você tem um arquivo para cada ${tipo}, escolha "Um arquivo com o plano de cada período" e envie cada arquivo no seu ${tipo}.`,
+            }
+          : null;
       return res.json({
+        modoErrado,
         metodo: "sem-ia",
         versaoLeitura: VERSAO_LEITURA,
         divisaoEncontrada: true,

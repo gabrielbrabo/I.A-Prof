@@ -93,7 +93,7 @@ const SECOES: Secao[] = [
   },
 ];
 
-export default function ComoUsar({ onFechar, onRever }: { onFechar: () => void; onRever: () => void }) {
+export default function ComoUsar({ onFechar, onRever }: { onFechar: () => void; onRever: (qual: "inicio" | "plano") => void }) {
   const [aberta, setAberta] = useState<string | null>("comecar");
 
   return (
@@ -109,16 +109,29 @@ export default function ComoUsar({ onFechar, onRever }: { onFechar: () => void; 
           </button>
         </div>
 
-        <button
-          onClick={onRever}
-          className="mb-4 flex w-full items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-left hover:bg-indigo-100"
-        >
-          <span className="text-2xl">▶️</span>
-          <span>
-            <span className="block text-sm font-semibold text-indigo-900">Fazer o tour guiado</span>
-            <span className="block text-xs text-indigo-800">Mostra na tela, passo a passo, onde clicar.</span>
-          </span>
-        </button>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Tour guiado (mostra na tela onde clicar)</p>
+        <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <button
+            onClick={() => onRever("inicio")}
+            className="flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-left hover:bg-indigo-100"
+          >
+            <span className="text-2xl">✨</span>
+            <span>
+              <span className="block text-sm font-semibold text-indigo-900">Tour: Gerar aula</span>
+              <span className="block text-xs text-indigo-800">Como registrar uma aula, do texto ao salvar.</span>
+            </span>
+          </button>
+          <button
+            onClick={() => onRever("plano")}
+            className="flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-left hover:bg-indigo-100"
+          >
+            <span className="text-2xl">📘</span>
+            <span>
+              <span className="block text-sm font-semibold text-indigo-900">Tour: Plano de curso</span>
+              <span className="block text-xs text-indigo-800">Como enviar, conferir e salvar o plano.</span>
+            </span>
+          </button>
+        </div>
 
         <div className="space-y-2">
           {SECOES.map((s) => {

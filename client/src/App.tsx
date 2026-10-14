@@ -11,7 +11,7 @@ import { contaApi, Situacao, Usuario } from "./api/conta";
 import Entrar from "./components/Entrar";
 import Assinatura from "./components/Assinatura";
 import Logo from "./components/Logo";
-import Tour, { PASSOS_INICIO } from "./components/Tour";
+import Tour, { PASSOS_INICIO, PASSOS_PLANO } from "./components/Tour";
 import ComoUsar from "./components/ComoUsar";
 import { FERRAMENTAS, ferramentaDa, Tela } from "./components/Menu";
 import InstalarApp from "./components/InstalarApp";
@@ -70,15 +70,22 @@ function Painel() {
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
   }, [menuAberto]);
-  const [tour, setTour] = useState(false);
+  const [tour, setTour] = useState<null | "inicio" | "plano">(null);
   useEffect(() => {
     if (!usuario || lerPref("tourVisto", "") === "1") return;
-    const t = window.setTimeout(() => setTour(true), 1200); // espera a tela carregar
+    const t = window.setTimeout(() => setTour((v) => v ?? "inicio"), 1200); // espera a tela carregar
     return () => window.clearTimeout(t);
   }, [usuario]);
+  // Primeira vez na tela Plano de curso: tour proprio dela
+  useEffect(() => {
+    if (!usuario || aba !== "plano" || tour || lerPref("tourPlanoVisto", "") === "1") return;
+    const t = window.setTimeout(() => setTour((v) => v ?? "plano"), 900);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usuario, aba]);
   const fimTour = () => {
-    setTour(false);
-    gravarPref("tourVisto", "1");
+    gravarPref(tour === "plano" ? "tourPlanoVisto" : "tourVisto", "1");
+    setTour(null);
   };
   useEffect(() => {
     diarioApi.status().then(setDiario).catch(() => setDiario(null));
@@ -455,14 +462,14 @@ function Painel() {
       {comoUsar && (
         <ComoUsar
           onFechar={() => setComoUsar(false)}
-          onRever={() => {
+          onRever={(qual) => {
             setComoUsar(false);
-            ir("registro");
-            window.setTimeout(() => setTour(true), 500);
+            ir(qual === "plano" ? "plano" : "registro");
+            window.setTimeout(() => setTour(qual), 600);
           }}
         />
       )}
-      {tour && <Tour passos={PASSOS_INICIO} onFim={fimTour} />}
+      {tour && <Tour key={tour} passos={tour === "plano" ? PASSOS_PLANO : PASSOS_INICIO} onFim={fimTour} />}
     </div>
   );
 }

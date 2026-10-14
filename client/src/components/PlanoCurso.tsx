@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { EXTENSOES, ItemPlano, PeriodoPlano, periodosPadrao, planoApi, TipoPeriodo } from "../api/planoCurso";
+import { ErroExtracao, EXTENSOES, ItemPlano, ModoErrado, PeriodoPlano, periodosPadrao, planoApi, TipoPeriodo } from "../api/planoCurso";
 import { habilidadeApi, Opcao } from "../api/registroAula";
 import { ANOS, UFS } from "../lib/formatarRegistro";
 import { gravarPref, lerPref, ufParaApi } from "../lib/prefs";
@@ -133,12 +133,21 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
   }
 
   // Le o arquivo assim que e escolhido, SEMPRE sem I.A (custo zero), nos dois modos.
+  // Arquivo enviado na opcao errada (ano inteiro x um arquivo de cada periodo): aviso por 7 segundos
+  const [modoAviso, setModoAviso] = useState<ModoErrado | null>(null);
+  useEffect(() => {
+    if (!modoAviso) return;
+    const t = window.setTimeout(() => setModoAviso(null), 7000);
+    return () => window.clearTimeout(t);
+  }, [modoAviso]);
+
   async function lerArquivos(lista: File[]) {
     if (!tipo || !lista.length || lendo) return;
     if (modo === "periodo" && !periodoUpload) return;
     setConferencia(null);
     setErro(null);
     setAviso(null);
+    setModoAviso(null);
     setLendo(true);
     try {
       const r = await planoApi.extrair({
@@ -148,6 +157,7 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
         tipoPeriodo: tipo,
         periodo: modo === "todos" ? "todos" : periodoUpload,
       });
+      if (r.modoErrado) setModoAviso(r.modoErrado);
       // Ano todo: substitui todos os periodos. Por periodo: substitui so o escolhido.
       setPeriodos((ps) =>
         ps.map((p) => {
@@ -198,6 +208,7 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
       );
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro ao ler o plano");
+      if (e instanceof ErroExtracao && e.modoErrado) setModoAviso(e.modoErrado);
       setArquivos([]);
       setInputKey((k) => k + 1);
     } finally {
@@ -269,6 +280,7 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
   // Botao de salvar usado no topo e no final da revisao
   const botaoSalvar = (
     <button
+      data-tour="pc-salvar"
       onClick={salvar}
       disabled={salvando || !totalItens || !tipo || trava > 0 || tudoSalvo}
       className={
@@ -286,8 +298,8 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
   return (
     <div className="space-y-5">
       {/* Cabecalho */}
-      <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:p-4 lg:grid-cols-4">
-        <div>
+      <div data-tour="pc-cabecalho" className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:p-4 lg:grid-cols-4">
+        <div data-tour="pc-serie">
           <label className="text-xs font-medium text-slate-500">Série</label>
           <select
             className={`${campo} ${!ano ? "border-amber-400 bg-amber-50" : ""}`}
@@ -302,7 +314,7 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
             ))}
           </select>
         </div>
-        <div>
+        <div data-tour="pc-uf">
           <label className="text-xs font-medium text-slate-500">UF</label>
           <select
             className={`${campo} ${!uf ? "border-amber-400 bg-amber-50" : ""}`}
@@ -316,7 +328,7 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
             ))}
           </select>
         </div>
-        <div>
+        <div data-tour="pc-ano">
           <label className="text-xs font-medium text-slate-500">Ano letivo</label>
           <input
             type="number"
@@ -325,7 +337,7 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
             onChange={(e) => (setAnoLetivo(Number(e.target.value)), pref("anoLetivo", e.target.value))}
           />
         </div>
-        <div>
+        <div data-tour="pc-divisao">
           <label className="text-xs font-medium text-slate-500">Divisão do ano *</label>
           <select
             className={`${campo} ${!tipo && ano && uf ? "border-amber-400 bg-amber-50" : ""}`}
@@ -355,15 +367,32 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
       {tipo && ano && uf && (
         <>
           {/* Upload */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div data-tour="pc-envio" className="rounded-xl border border-slate-200 bg-white p-4">
             <p className="text-sm font-semibold text-slate-700">Enviar plano de curso</p>
             <p className="mb-3 text-xs text-slate-500">PDF com texto, Word (.docx), Excel (.xlsx), CSV ou TXT. As habilidades são lidas direto do documento, sem custo.</p>
-            <div className="mb-3 flex flex-wrap items-center gap-4 text-sm">
+            {modoAviso && (
+              <div role="alert" className="mb-3 rounded-lg border-2 border-amber-400 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+                <p>
+                  ⚠️ <b>Confira a opção de envio:</b> {modoAviso.mensagem}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModo(modoAviso.sugerido);
+                    setModoAviso(null);
+                  }}
+                  className="mt-1.5 rounded-md bg-amber-500 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-600"
+                >
+                  {modoAviso.sugerido === "todos" ? "Mudar para: um arquivo com o plano do ano inteiro" : "Mudar para: um arquivo com o plano de cada período"}
+                </button>
+              </div>
+            )}
+            <div data-tour="pc-modo" className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
               <label className="flex items-center gap-2">
-                <input type="radio" checked={modo === "todos"} onChange={() => setModo("todos")} /> Um plano com o ano todo
+                <input type="radio" checked={modo === "todos"} onChange={() => setModo("todos")} /> Um arquivo com o plano do ano inteiro
               </label>
               <label className="flex items-center gap-2">
-                <input type="radio" checked={modo === "periodo"} onChange={() => setModo("periodo")} /> Um plano por período
+                <input type="radio" checked={modo === "periodo"} onChange={() => setModo("periodo")} /> Um arquivo com o plano de cada período
               </label>
               {modo === "periodo" && (
                 <select
@@ -380,8 +409,35 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
                 </select>
               )}
             </div>
+            {/* Exemplo pequeno de onde vai cada arquivo */}
+            <div data-tour="pc-exemplo" className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              <p className="mb-1 font-semibold text-slate-700">Exemplo:</p>
+              {modo === "todos" ? (
+                <div className="space-y-0.5">
+                  <p>
+                    📄 <b>plano-{(ANOS.find((x) => x.valor === ano)?.nome ?? ano).toLowerCase().replace(/\s+/g, "-")}-{anoLetivo}.pdf</b> <span className="text-slate-400">(um arquivo só, com todos os períodos dentro)</span>
+                  </p>
+                  {periodos.map((p) => (
+                    <p key={p.numero} className="pl-5 font-mono text-[11px] text-slate-500">
+                      {p.numero}º {nomeTipo.toUpperCase()} → habilidades do {p.numero}º {tipo}
+                    </p>
+                  ))}
+                  <p className="pt-0.5">Envie uma vez só: o sistema separa as habilidades em cada {tipo}.</p>
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  {periodos.map((p) => (
+                    <p key={p.numero}>
+                      📄 <b>plano-{p.numero}º-{tipo}.pdf</b> → escolha <b>“{p.numero}º {nomeTipo}”</b> e envie
+                    </p>
+                  ))}
+                  <p className="pt-0.5">Um arquivo para cada {tipo}: escolha o {tipo} na lista e depois o arquivo dele.</p>
+                </div>
+              )}
+            </div>
             <div className="flex flex-wrap items-center gap-3">
               <input
+                data-tour="pc-arquivo"
                 key={inputKey}
                 type="file"
                 multiple
@@ -400,7 +456,7 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
               <div className="mt-3 rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
                 <b>Importante:</b> o documento precisa indicar em qual {tipo} está cada habilidade — por exemplo, um título{" "}
                 <b>"1º {nomeTipo}"</b>, <b>"2º {nomeTipo}"</b>… antes das habilidades de cada período. A leitura é feita sem I.A e separa cada habilidade no seu período. As habilidades sem período
-                indicado não são salvas. Se o seu plano não tem essa divisão, use <b>"Um plano por período"</b> e envie um arquivo para cada{" "}
+                indicado não são salvas. Se o seu plano não tem essa divisão, use <b>"Um arquivo com o plano de cada período"</b> e envie um arquivo para cada{" "}
                 {tipo}.
                 {totalItens > 0 && <span className="block pt-1">Enviar um novo arquivo substitui as habilidades de todos os períodos.</span>}
               </div>
@@ -470,7 +526,7 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
         )}
 
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div className="-mx-1 flex max-w-full gap-1 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:pb-0">
+          <div data-tour="pc-periodos" className="-mx-1 flex max-w-full gap-1 overflow-x-auto px-1 pb-1 sm:flex-wrap sm:pb-0">
             {periodos.map((p) => (
               <button
                 key={p.numero}
@@ -772,7 +828,7 @@ function AdicionarHabilidade({
   );
 
   return (
-    <div className="rounded-lg border border-dashed border-indigo-200 bg-indigo-50/40 p-3">
+    <div data-tour="pc-adicionar" className="rounded-lg border border-dashed border-indigo-200 bg-indigo-50/40 p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-semibold text-slate-700">+ Adicionar habilidade manualmente ao {titulo}</p>
         <div className="flex gap-1 rounded-lg bg-slate-100 p-0.5">

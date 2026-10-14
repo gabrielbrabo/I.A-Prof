@@ -3,14 +3,18 @@ import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 // Tour guiado: destaca um elemento da tela (marcado com data-tour="...") e mostra um card explicando.
 // Passos cujo elemento nao existe/nao esta visivel sao pulados.
 export interface PassoTour {
-  alvo: string; // valor do atributo data-tour
+  alvo: string | string[]; // valor do atributo data-tour (lista: usa o primeiro que estiver na tela)
   titulo: string;
   texto: string;
 }
 
-function acharAlvo(alvo: string): HTMLElement | null {
-  const els = Array.from(document.querySelectorAll<HTMLElement>(`[data-tour="${alvo}"]`));
-  return els.find((e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== "hidden") ?? null;
+function acharAlvo(alvo: string | string[]): HTMLElement | null {
+  for (const a of Array.isArray(alvo) ? alvo : [alvo]) {
+    const els = Array.from(document.querySelectorAll<HTMLElement>(`[data-tour="${a}"]`));
+    const el = els.find((e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== "hidden");
+    if (el) return el;
+  }
+  return null;
 }
 
 const PAD = 6;
@@ -177,4 +181,56 @@ export const PASSOS_INICIO: PassoTour[] = [
   },
   { alvo: "aba-historico", titulo: "Aulas salvas", texto: "Todas as aulas ficam aqui para copiar, editar ou enviar ao D.E.V." },
   { alvo: "ajuda", titulo: "Ficou com dúvida?", texto: "Em ❓ Como usar você vê o passo a passo e deixa rever este tour quando quiser." },
+];
+
+// Passos do tour da tela Plano de curso. Partes que so aparecem depois (envio, revisao) usam o
+// cabecalho como alternativa, para o passo ser explicado mesmo antes de o professor preencher.
+export const PASSOS_PLANO: PassoTour[] = [
+  {
+    alvo: "pc-serie",
+    titulo: "Série",
+    texto: "Escolha a série do plano. Cada série tem o seu plano de curso.",
+  },
+  { alvo: "pc-uf", titulo: "UF", texto: "Escolha o estado (ou BNCC). Assim os códigos do currículo do seu estado são reconhecidos." },
+  { alvo: "pc-ano", titulo: "Ano letivo", texto: "Confira o ano do plano. Ele vale para as aulas desse ano." },
+  {
+    alvo: "pc-divisao",
+    titulo: "Divisão do ano",
+    texto: "Escolha bimestre, trimestre ou semestre. É obrigatório antes de enviar o arquivo.",
+  },
+  {
+    alvo: ["pc-modo", "pc-cabecalho"],
+    titulo: "Como é o seu arquivo?",
+    texto: "Escolha uma opção: “Um arquivo com o plano do ano inteiro” (um PDF com 1º, 2º e 3º trimestre dentro) ou “Um arquivo com o plano de cada período” (um PDF para cada trimestre).",
+  },
+  {
+    alvo: ["pc-exemplo", "pc-modo", "pc-cabecalho"],
+    titulo: "Exemplo: ano inteiro",
+    texto: "Ano inteiro: envie o arquivo UMA vez. Ele precisa ter títulos como “1º TRIMESTRE”, “2º TRIMESTRE”… antes das habilidades — o sistema separa cada uma no seu período.",
+  },
+  {
+    alvo: ["pc-exemplo", "pc-modo", "pc-cabecalho"],
+    titulo: "Exemplo: um arquivo por período",
+    texto: "Um por período: escolha o trimestre na lista (ex.: 2º trimestre) e envie o arquivo dele. Repita para cada trimestre. Se o arquivo não combinar com a opção escolhida, o sistema avisa.",
+  },
+  {
+    alvo: ["pc-arquivo", "pc-envio", "pc-cabecalho"],
+    titulo: "Enviar o arquivo",
+    texto: "Toque em “Escolher arquivo” e selecione o PDF, Word, Excel, CSV ou TXT. A leitura é automática, sem I.A e sem gastar o seu limite.",
+  },
+  {
+    alvo: ["pc-periodos", "pc-cabecalho"],
+    titulo: "Confira cada período",
+    texto: "Depois de ler o arquivo, confira as habilidades em cada aba de período. Dá para editar o texto, mover ou remover.",
+  },
+  {
+    alvo: ["pc-adicionar", "pc-cabecalho"],
+    titulo: "Faltou alguma?",
+    texto: "Use “+ Adicionar habilidade manualmente” para incluir no período certo: buscando na base ou digitando o código.",
+  },
+  {
+    alvo: ["pc-salvar", "pc-cabecalho"],
+    titulo: "Salvar o plano",
+    texto: "Clique em Salvar. Pronto: as aulas em Gerar aula passam a usar as habilidades deste plano.",
+  },
 ];

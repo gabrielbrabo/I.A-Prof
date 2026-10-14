@@ -35,6 +35,7 @@ export interface PlanoCurso {
 }
 
 export interface ResultadoExtracao {
+  modoErrado?: ModoErrado | null;
   metodo: "sem-ia" | "ia";
   divisaoEncontrada: boolean;
   naoIdentificados: number;
@@ -81,8 +82,14 @@ export function erroDatas(p: Pick<PeriodoPlano, "inicio" | "fim">): string | nul
 }
 
 // Erro da leitura: precisaIA = o arquivo so pode ser lido com I.A (o professor decide)
+// Aviso de arquivo enviado na opcao errada (ano inteiro x um arquivo de cada periodo)
+export interface ModoErrado {
+  sugerido: "todos" | "periodo";
+  mensagem: string;
+}
+
 export class ErroExtracao extends Error {
-  constructor(message: string, public precisaIA: boolean) {
+  constructor(message: string, public precisaIA: boolean, public modoErrado: ModoErrado | null = null) {
     super(message);
   }
 }
@@ -118,8 +125,8 @@ export const planoApi = {
     if (p.permitirIA) fd.append("permitirIA", "1");
     const resp = await fetch(`${BASE}/planos-curso/extrair`, { method: "POST", body: fd, headers: cabecalhoAuth() });
     if (resp.status === 401) await lerResposta(resp);
-    const dados = (await resp.json().catch(() => ({}))) as { message?: string; precisaIA?: boolean };
-    if (!resp.ok) throw new ErroExtracao(dados.message || `Erro ${resp.status}`, !!dados.precisaIA);
+    const dados = (await resp.json().catch(() => ({}))) as { message?: string; precisaIA?: boolean; modoErrado?: ModoErrado };
+    if (!resp.ok) throw new ErroExtracao(dados.message || `Erro ${resp.status}`, !!dados.precisaIA, dados.modoErrado ?? null);
     return dados as ResultadoExtracao;
   },
 
