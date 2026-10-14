@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { contaApi } from "../api/conta";
 import { salvarToken } from "../lib/sessao";
+import InstalarApp from "./InstalarApp";
 
 // Google Identity Services (botao oficial "Entrar com Google")
 type Gis = {
@@ -42,8 +43,17 @@ export default function Entrar({ onEntrou }: { onEntrou: () => void }) {
   // Mostra o botao do Google se o servidor tiver GOOGLE_CLIENT_ID
   useEffect(() => {
     let ativo = true;
-    contaApi
-      .configAuth()
+    // Servidor gratis (Render) pode estar "acordando": tenta de novo por ~2 min
+    const buscarConfig = async (tentativa = 0): Promise<{ googleClientId: string | null }> => {
+      try {
+        return await contaApi.configAuth();
+      } catch (e) {
+        if (!ativo || tentativa >= 24) throw e;
+        await new Promise((r) => setTimeout(r, 5000));
+        return buscarConfig(tentativa + 1);
+      }
+    };
+    buscarConfig()
       .then(async ({ googleClientId }) => {
         if (!googleClientId || !ativo) return;
         const g = await carregarGis();
@@ -67,7 +77,7 @@ export default function Entrar({ onEntrou }: { onEntrou: () => void }) {
         g.accounts.id.renderButton(botaoGoogle.current, { theme: "outline", size: "large", width: Math.max(200, Math.min(300, botaoGoogle.current.clientWidth || 300)), text: "continue_with", locale: "pt-BR" });
         setTemGoogle(true);
       })
-      .catch(() => {});
+      .catch((e) => console.warn("Login com Google indisponível:", e));
     return () => {
       ativo = false;
     };
@@ -91,8 +101,8 @@ export default function Entrar({ onEntrou }: { onEntrou: () => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <h1 className="mb-1 text-center text-2xl font-bold text-slate-800">
-          I.A <span className="text-indigo-600">Prof</span>
+        <h1 className="mb-3 flex justify-center">
+          <img src="/logo.svg" alt="I.A Prof" className="h-24 w-24 rounded-[22%] shadow-lg shadow-indigo-500/30" />
         </h1>
         <p className="mb-6 text-center text-sm text-slate-500">Registro de aulas com as habilidades do seu plano de curso.</p>
         <form onSubmit={enviar} className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -153,6 +163,7 @@ export default function Entrar({ onEntrou }: { onEntrou: () => void }) {
             <p className="text-center text-[11px] text-slate-500">Teste grátis por 15 dias ou 20 aulas, sem cartão.</p>
           )}
         </form>
+        <InstalarApp variante="cartao" />
       </div>
     </div>
   );

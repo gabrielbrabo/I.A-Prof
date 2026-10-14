@@ -10,6 +10,8 @@ import { lerToken, sair } from "./lib/sessao";
 import { contaApi, Situacao, Usuario } from "./api/conta";
 import Entrar from "./components/Entrar";
 import Assinatura from "./components/Assinatura";
+import InstalarApp from "./components/InstalarApp";
+import Logo from "./components/Logo";
 
 const QTD_PERIODOS: Record<TipoPeriodo, number> = { bimestre: 4, trimestre: 3, semestre: 2 };
 
@@ -121,8 +123,8 @@ function Painel() {
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white md:static">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-3 py-2 sm:px-4 md:py-3">
-          <h1 className="shrink-0 text-lg font-bold text-slate-800">
-            I.A <span className="text-indigo-600">Prof</span>
+          <h1 className="shrink-0">
+            <Logo className="h-9 md:h-10" />
           </h1>
           {/* Computador / tablet: abas no topo */}
           <nav className="hidden gap-1 md:flex">
@@ -140,6 +142,7 @@ function Painel() {
             ))}
           </nav>
           <div className="flex min-w-0 items-center gap-1">
+            <InstalarApp variante="topo" />
             <button
               onClick={trocarTema}
               title={tema === "escuro" ? "Usar tema claro" : "Usar tema escuro"}
