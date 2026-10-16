@@ -52,6 +52,7 @@ async function transcreverOpenAI(audio: Buffer, nome: string, tipo: string): Pro
   fd.append("model", env.openaiModeloVoz);
   fd.append("language", "pt");
   fd.append("response_format", "json");
+  fd.append("temperature", "0"); // menos "invencao" e repeticao
   fd.append("prompt", DICA);
   const resp = await fetch("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST",
