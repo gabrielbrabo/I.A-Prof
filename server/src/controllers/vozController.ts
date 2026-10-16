@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import multer from "multer";
-import { ErroTranscricao, transcreverAudio } from "../services/transcricao";
+import { CUSTO_HORA_VOZ, ErroTranscricao, provedorVoz, transcreverAudio } from "../services/transcricao";
 import { comMedicao, exigirAcesso, SemAcesso, somarCustoUsd } from "../services/uso";
 
 // Audio em memoria, ate 6 MB (~2-3 minutos de fala comprimida): limita custo e tempo
@@ -20,8 +20,8 @@ export async function transcrever(req: Request, res: Response) {
   try {
     await exigirAcesso(req.usuarioId!);
     const texto = await comMedicao(req.usuarioId!, async () => {
-      // Custo aproximado do Whisper (Groq ~US$ 0,04/hora); audio comprimido ~2 KB por segundo
-      somarCustoUsd(((f.size / 2000) * 0.04) / 3600);
+      // Custo aproximado por hora de audio (Groq ~US$ 0,04; OpenAI mini ~US$ 0,18); audio comprimido ~2 KB por segundo
+      somarCustoUsd(((f.size / 2000) * CUSTO_HORA_VOZ[provedorVoz() ?? "groq"]) / 3600);
       return transcreverAudio(f.buffer, f.originalname || "fala.webm", f.mimetype);
     });
     res.json({ texto });

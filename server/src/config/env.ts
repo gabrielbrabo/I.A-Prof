@@ -26,6 +26,8 @@ export const env = {
   // Transcricao de voz (Groq Whisper) para navegadores sem ditado proprio (Firefox, Brave, Opera...)
   groqKey: process.env.GROQ_API_KEY || "",
   groqModeloVoz: process.env.GROQ_MODELO_VOZ || "whisper-large-v3-turbo",
+  // sem Groq, o ditado usa a OpenAI (mesma OPENAI_API_KEY das atividades)
+  openaiModeloVoz: process.env.OPENAI_MODELO_VOZ || "gpt-4o-mini-transcribe",
   // Login (JWT)
   jwtSecret: process.env.JWT_SECRET || "troque-este-segredo-no-env",
   jwtExpira: process.env.JWT_EXPIRA || "30d",
