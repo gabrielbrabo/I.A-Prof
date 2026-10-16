@@ -11,7 +11,6 @@ export const env = {
   anthropicModel: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5",
   // Modelo da etapa de ESCOLHA das habilidades (opcional; ex.: claude-opus-5-5 para mais precisao)
   anthropicModelEscolha: process.env.ANTHROPIC_MODEL_ESCOLHA || "",
-  // Modelo das ATIVIDADES (gerar e ajustar). Vazio = ANTHROPIC_MODEL. Ex.: claude-opus-5-5 (mais caprichado, ~2,5x o custo)
   // Gerar/ajustar atividades: so OpenAI (GPT)
   openaiModeloAtividade: process.env.OPENAI_MODEL_ATIVIDADE || "gpt-6.1-sol",
   openaiRaciocinio: process.env.OPENAI_RACIOCINIO ?? "medium", // low | medium | high ("" = sem)

@@ -61,6 +61,9 @@ export async function comprar(req: Request, res: Response) {
   }
   const u = await Usuario.findById(req.usuarioId);
   if (!u) return res.status(401).json({ message: "Faça login de novo." });
+  // creditos completam o limite do plano: so quem tem assinatura ativa pode comprar
+  const s = await situacaoDoUsuario(String(u._id));
+  if (!s.creditos.podeComprar) return res.status(403).json({ message: "Os créditos extras são para quem tem um plano ativo. Assine um plano primeiro." });
 
   const compra = await CompraCredito.create({
     usuario: u._id,

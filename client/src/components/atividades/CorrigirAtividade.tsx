@@ -690,7 +690,7 @@ function CorrecaoAluno({
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
             {!fotoLiberada ? (
               <span className="text-xs text-slate-500">
-                📷 Correção com foto (I.A) nos planos pagos.{" "}
+                📷 Correção com foto (I.A) nos planos Profissional e Premium.{" "}
                 {onAssinar && (
                   <button onClick={onAssinar} className="font-medium text-indigo-600 hover:underline">
                     Ver planos

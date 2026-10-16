@@ -70,7 +70,7 @@ export default function AtividadesSalvas({
       )}
       {teste && (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
-          <span>🎁 No teste grátis você gera, imprime, corrige à mão e lança as notas. A correção com foto (I.A) é dos planos pagos.</span>
+          <span>🎁 No teste grátis você gera, imprime, corrige à mão e lança as notas. A correção com foto (I.A) é dos planos Profissional e Premium.</span>
           {onAssinar && (
             <button onClick={onAssinar} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">
               Ver planos

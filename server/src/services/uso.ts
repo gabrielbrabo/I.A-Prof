@@ -193,7 +193,7 @@ export async function situacaoDoUsuario(usuarioId: string): Promise<Situacao> {
       diasRestantes,
     },
     uso: { percentual, mes: mesAtual() },
-    creditos: { saldoCentavos: Math.floor(creditos / env.creditos.fator), podeComprar: true }, // compra liberada sempre
+    creditos: { saldoCentavos: Math.floor(creditos / env.creditos.fator), podeComprar: assinante }, // creditos so para quem tem plano ativo (completam o limite do mes)
     assinatura: a
       ? {
           status: a.status,
@@ -286,13 +286,16 @@ export async function exigirConta(usuarioId: string): Promise<Situacao> {
   return s;
 }
 
-// Correcao com foto (I.A): so planos pagos. Correcao a mao e lancar notas (sem I.A) valem tambem no teste.
+// Correcao com foto (I.A): so Profissional e Premium. Correcao a mao e lancar notas (sem I.A) valem em todos (e no teste).
+export const PLANOS_FOTO = ["profissional", "premium"];
 export async function exigirPlanoPago(usuarioId: string): Promise<Situacao> {
   const s = await situacaoDoUsuario(usuarioId);
-  if (s.planoId) return s;
+  if (s.planoId && PLANOS_FOTO.includes(s.planoId)) return s;
   throw new SemAcesso(
-    s.acesso === "teste"
-      ? "A correção com foto (I.A) é dos planos pagos. No teste grátis você pode corrigir à mão e lançar as notas."
-      : (s.motivo ?? "Assine um plano para corrigir atividades e lançar notas.")
+    s.planoId
+      ? "A correção com foto (I.A) é dos planos Profissional e Premium. No seu plano você pode corrigir à mão e lançar as notas — ou mude de plano."
+      : s.acesso === "teste"
+        ? "A correção com foto (I.A) é dos planos Profissional e Premium. No teste grátis você pode corrigir à mão e lançar as notas."
+        : (s.motivo ?? "Assine um plano para corrigir atividades e lançar notas.")
   );
 }

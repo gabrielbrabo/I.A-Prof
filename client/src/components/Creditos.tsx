@@ -7,7 +7,7 @@ const SUGESTOES = [1000, 2000, 5000]; // R$ 10, 20, 50
 // Creditos extras de I.A: o professor digita quanto quer colocar (em reais) e paga uma vez.
 // O saldo nao vence e so e usado quando o limite do plano no mes acaba.
 export default function Creditos({ onSituacao, foco = false, assinante = true }: { onSituacao: (s: Situacao) => void; foco?: boolean; assinante?: boolean }) {
-  const [info, setInfo] = useState<{ saldoCentavos: number; minimoCentavos: number; maximoCentavos: number; compras: CompraCredito[] } | null>(null);
+  const [info, setInfo] = useState<{ saldoCentavos: number; podeComprar?: boolean; minimoCentavos: number; maximoCentavos: number; compras: CompraCredito[] } | null>(null);
   const [valor, setValor] = useState("20");
   const [form, setForm] = useState(formVazio);
   const [abrir, setAbrir] = useState(true); // formulario sempre a mao
@@ -19,6 +19,7 @@ export default function Creditos({ onSituacao, foco = false, assinante = true }:
   const caixa = useRef<HTMLDivElement>(null);
 
   const carregar = () => creditosApi.meus().then(setInfo).catch(() => {});
+  const podeComprar = info?.podeComprar ?? assinante;
   useEffect(() => {
     carregar();
   }, []);
@@ -97,7 +98,9 @@ export default function Creditos({ onSituacao, foco = false, assinante = true }:
         <div>
           <p className="text-sm font-semibold text-slate-700">⚡ Créditos extras de uso</p>
           <p className="text-xs text-slate-500">
-            Compre quando quiser. Não vencem e só são usados depois que o limite de I.A do mês acaba{assinante ? "" : " — no teste grátis ou quando você assinar um plano"}.
+            {podeComprar
+              ? "Compre quando quiser. Não vencem e só são usados depois que o limite de I.A do mês acaba."
+              : "Para quem tem um plano ativo: os créditos completam o limite de I.A do mês quando ele acaba."}
           </p>
         </div>
         <div className="text-right">
@@ -124,6 +127,8 @@ export default function Creditos({ onSituacao, foco = false, assinante = true }:
             )}
           </div>
         </div>
+      ) : !podeComprar ? (
+        <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">🔒 Assine um dos planos acima para poder comprar créditos extras.</p>
       ) : !abrir ? (
         <button onClick={() => setAbrir(true)} className="mt-3 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
           + Comprar créditos

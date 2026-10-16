@@ -257,8 +257,8 @@ export default function Assinatura({
       )}
       {erro && !escolhido && <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{erro}</p>}
 
-      {/* Creditos extras (abaixo dos planos): compra liberada a qualquer momento */}
-      <Creditos onSituacao={onSituacao} foco={focoCreditos} assinante={assinante} />
+      {/* Creditos extras (abaixo dos planos): so para quem tem plano ativo */}
+      <Creditos onSituacao={onSituacao} foco={focoCreditos} assinante={!!s?.creditos?.podeComprar} />
     </div>
   );
 }

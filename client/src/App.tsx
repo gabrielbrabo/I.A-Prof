@@ -467,7 +467,7 @@ function Painel() {
               </div>
               <p className="mt-1 text-[11px] text-slate-400">
                 {teste
-                  ? `${t.diasRestantes} dia(s) restante(s) · ${Math.max(0, limiteQtd - usados)} ${emAtiv ? "atividade(s)" : "aula(s)"} restante(s).${emAtiv ? " No teste, a correção com foto é dos planos pagos; à mão é liberada." : " Vale o que acabar primeiro."}`
+                  ? `${t.diasRestantes} dia(s) restante(s) · ${Math.max(0, limiteQtd - usados)} ${emAtiv ? "atividade(s)" : "aula(s)"} restante(s).${emAtiv ? " No teste, a correção com foto é dos planos Profissional e Premium; à mão é liberada." : " Vale o que acabar primeiro."}`
                   : "Renova todo dia 1º."}
                 {saldo > 0 && !teste && <> · ⚡ Créditos extras: {reais(saldo)}</>}
                 {(teste || pct >= 90) && (
@@ -637,7 +637,7 @@ function Painel() {
               key={atividadeCorrigir._id}
               atividade={atividadeCorrigir}
               diario={diario}
-              fotoLiberada={!!situacao?.planoId}
+              fotoLiberada={situacao?.planoId === "profissional" || situacao?.planoId === "premium"}
               onAssinar={() => ir("assinatura")}
               onVoltar={() => {
                 setAtividadeCorrigir(null);
@@ -774,6 +774,7 @@ function ModalSemLimite({
   onFechar: () => void;
 }) {
   const assinante = !!situacao?.planoId;
+  const podeComprar = !!situacao?.creditos?.podeComprar;
   const premium = situacao?.planoId === "premium";
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm" onClick={onFechar} role="dialog" aria-modal="true" aria-labelledby="titulo-sem-limite">
@@ -791,9 +792,9 @@ function ModalSemLimite({
         <div className="mt-4 grid gap-2">
           {assinante ? (
             <>
-              <button onClick={onComprar} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">
+              {podeComprar && <button onClick={onComprar} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">
                 ⚡ Comprar créditos de uso
-              </button>
+              </button>}
               {!premium && (
                 <button onClick={onPlanos} className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
                   ⬆️ Fazer upgrade do plano
