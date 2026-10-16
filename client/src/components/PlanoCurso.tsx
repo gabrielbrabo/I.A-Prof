@@ -452,9 +452,25 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
                 </div>
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-3">
+            {/* Area para escolher (ou arrastar) o arquivo: mais clara que o botao padrao do navegador */}
+            <label
+              data-tour="pc-arquivo"
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (lendo || (modo === "periodo" && !periodoUpload)) return;
+                const lista = Array.from(e.dataTransfer.files ?? []);
+                if (!lista.length) return;
+                setArquivos(lista);
+                lerArquivos(lista);
+              }}
+              className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed px-4 py-6 text-center transition ${
+                lendo || (modo === "periodo" && !periodoUpload)
+                  ? "cursor-not-allowed border-slate-200 bg-slate-50 opacity-60"
+                  : "border-indigo-300 bg-indigo-50/40 hover:bg-indigo-50"
+              }`}
+            >
               <input
-                data-tour="pc-arquivo"
                 key={inputKey}
                 type="file"
                 multiple
@@ -465,16 +481,21 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
                   setArquivos(lista);
                   lerArquivos(lista); // sem botao: le na hora, sem I.A
                 }}
-                className="w-full max-w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium hover:file:bg-slate-200 disabled:opacity-50"
+                className="sr-only"
               />
-              {lendo && <span className="text-sm text-indigo-600">Lendo o arquivo...</span>}
-            </div>
+              <span className="text-3xl" aria-hidden>
+                {lendo ? "⏳" : "📎"}
+              </span>
+              <span className="text-sm font-semibold text-indigo-800">
+                {lendo ? "Lendo o arquivo..." : modo === "periodo" && !periodoUpload ? `Escolha o ${tipo} acima primeiro` : "Toque para escolher o arquivo"}
+              </span>
+              {!lendo && <span className="text-xs text-slate-500">ou arraste aqui · PDF, Word, Excel, CSV ou TXT</span>}
+              {arquivos.length > 0 && !lendo && <span className="mt-1 text-xs text-slate-600">📄 {arquivos.map((a) => a.name).join(", ")}</span>}
+            </label>
             {modo === "todos" ? (
               <div className="mt-3 rounded-lg bg-indigo-50 px-3 py-2 text-xs text-indigo-800">
-                <b>Importante:</b> o documento precisa indicar em qual {tipo} está cada habilidade — por exemplo, um título{" "}
-                <b>"1º {nomeTipo}"</b>, <b>"2º {nomeTipo}"</b>… antes das habilidades de cada período. A leitura é feita sem I.A e separa cada habilidade no seu período. As habilidades sem período
-                indicado não são salvas. Se o seu plano não tem essa divisão, use <b>"Um arquivo com o plano de cada período"</b> e envie um arquivo para cada{" "}
-                {tipo}.
+                💡 O arquivo precisa ter títulos como <b>"1º {nomeTipo}"</b>, <b>"2º {nomeTipo}"</b>… antes das habilidades. Se não tiver, escolha{" "}
+                <b>"Um arquivo com o plano de cada período"</b>.
                 {totalItens > 0 && <span className="block pt-1">Enviar um novo arquivo substitui as habilidades de todos os períodos.</span>}
               </div>
             ) : (

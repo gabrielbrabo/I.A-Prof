@@ -43,7 +43,27 @@ export interface DadosPix {
   valorCentavos: number | null;
 }
 
+// Cobranca unica (creditos extras)
+export interface CriarCobranca {
+  cliente: { nome: string; email: string; cpfCnpj: string; telefone?: string };
+  valorCentavos: number;
+  metodo: "PIX" | "CREDIT_CARD";
+  descricao: string;
+  referencia: string; // id interno da compra
+  cartao?: DadosCartao;
+  titular?: DadosTitular;
+  ip?: string;
+}
+export interface ResultadoCobranca {
+  paymentId: string;
+  pago: boolean;
+  checkoutUrl: string | null;
+}
+
 export interface Gateway {
+  criarCobranca(d: CriarCobranca): Promise<ResultadoCobranca>;
+  pixCobranca?(paymentId: string): Promise<DadosPix | null>;
+  cobrancaPaga(paymentId: string): Promise<boolean | null>; // null = cancelada/estornada
   pix?(subscriptionId: string): Promise<DadosPix | null>;
   criarAssinatura(d: CriarAssinatura): Promise<ResultadoAssinatura>;
   consultarStatus(subscriptionId: string): Promise<"active" | "past_due" | "canceled" | null>;

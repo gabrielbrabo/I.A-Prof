@@ -62,7 +62,6 @@ function gravarRascunho(r: Rascunho | null) {
 }
 
 const LIMITE_PADRAO = 2000; // caracteres do texto final no diario
-const ATALHOS_LIMITE = [1000, 2000, 3000, 4000];
 
 export default function RegistroAula({
   onSalvo,
@@ -76,6 +75,7 @@ export default function RegistroAula({
   onDiario,
   onAbrirDiario,
   onSemAcesso,
+  onAbrirConfig,
 }: {
   onSalvo: () => void;
   registroEditar?: RegistroSalvo | null; // aberto pelo Historico para conferir/editar
@@ -88,6 +88,7 @@ export default function RegistroAula({
   onDiario?: (s: SituacaoDiario | null) => void;
   onAbrirDiario?: () => void;
   onSemAcesso?: () => void; // teste acabou / sem assinatura / limite do mes: abre "Minha assinatura"
+  onAbrirConfig?: () => void; // abre Configuracoes (nome, estado, tamanho do texto)
 }) {
   const editando = registroEditar ?? null;
   const [rascunho] = useState(() => (editando ? null : lerRascunho())); // aula nova em andamento
@@ -139,6 +140,7 @@ export default function RegistroAula({
   const setSituacaoDiario = (f: (s: SituacaoDiario | null) => SituacaoDiario | null) => onDiario?.(f(diario));
   const [turmasDiario, setTurmasDiario] = useState<TurmaDiario[] | null>(null);
   const [erroTurmasDiario, setErroTurmasDiario] = useState<string | null>(null);
+  const [tentativaTurmas, setTentativaTurmas] = useState(0); // "Tentar de novo" / nova tentativa automatica
   // "" = nao escolhida; "outra" = turma digitada (fora do Diario); senao o id da turma no Diario
   const [diarioTurmaId, setDiarioTurmaId] = useState<string>(
     () => editando?.diarioTurmaId ?? rascunho?.diarioTurmaId ?? lerPref(`diarioTurma.${editando?.ano ?? lerPref("ano", "")}`, "")
@@ -162,13 +164,18 @@ export default function RegistroAula({
       .catch((e) => {
         if (!ativo) return;
         if (e instanceof ErroReconectarDiario) setSituacaoDiario((s) => (s ? { ...s, conectado: false, nome: null, escolas: [] } : s));
+        else if (tentativaTurmas === 0) {
+          // D.E.V oscilou ou estava "acordando": tenta de novo sozinho uma vez
+          setTimeout(() => ativo && setTentativaTurmas(1), 4000);
+          return;
+        }
         setErroTurmasDiario(e instanceof Error ? e.message : "Erro ao buscar turmas do D.E.V");
         setTurmasDiario(null);
       });
     return () => {
       ativo = false;
     };
-  }, [situacaoDiario?.conectado, anoLetivo]);
+  }, [situacaoDiario?.conectado, anoLetivo, tentativaTurmas]);
 
   // Ao escolher turma do Diario + data: avisa na hora se ja tem aula registrada nesse dia (ou se a data nao aceita aula)
   const [verifDiario, setVerifDiario] = useState<VerificacaoDiario | null>(null);
@@ -407,7 +414,7 @@ export default function RegistroAula({
   async function gerar() {
     if (ditado.ouvindo) ditado.parar();
     if (!ano || !uf) {
-      setErro("Selecione a série e a UF da aula.");
+      setErro(!ano ? "Escolha a série da aula." : "Escolha o seu estado em ⚙️ Configurações (é só uma vez).");
       return;
     }
     if (!periodo) {
@@ -439,6 +446,7 @@ export default function RegistroAula({
         )
       );
       onUsouIA?.();
+      window.dispatchEvent(new CustomEvent("iaprof:tour", { detail: "aulaPronta" })); // guia da 1a aula gerada
       // Ja ha aulas do professor com texto editado: o texto vem no formato dele
       if (r.textoEstilo) {
         itensNoManual.current = r.itens;
@@ -582,23 +590,29 @@ export default function RegistroAula({
         </div>
       )}
 
-      {/* Cabecalho da turma */}
-      <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:p-4 lg:grid-cols-7">
-        <div className="col-span-2 min-w-0 sm:col-span-1 lg:col-span-2">
-          <div className="flex items-center justify-between gap-1">
-            <label className="text-xs font-medium text-slate-500">Professor(a)</label>
-            {nomeDev && <span className="text-[10px] font-medium text-emerald-700">nome do D.E.V</span>}
-          </div>
-          <input
-            className={`${campo} ${nomeDev ? "cursor-not-allowed bg-slate-50 text-slate-600" : ""}`}
-            value={professor}
-            readOnly={!!nomeDev}
-            title={nomeDev ? "Conectado ao D.E.V: o nome usado é o do seu cadastro no D.E.V" : undefined}
-            onChange={(e) => !nomeDev && mudar(setProfessorEdit as (v: string) => void, "professor")(e.target.value)}
-          />
-        </div>
+      {/* Configuracoes em uso (nome, estado, tamanho do texto): mudam em Configuracoes */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-slate-100/70 px-3 py-2 text-xs text-slate-600" data-tour="config-barra">
+        <span title="Nome no diário">👤 {professor || "sem nome"}</span>
+        <span className="text-slate-300">•</span>
+        <span title="Estado">📍 {uf === "BNCC" ? "BNCC" : uf || <b className="text-amber-700">estado não escolhido</b>}</span>
+        <span className="text-slate-300">•</span>
+        <span title="Tamanho máximo do texto no diário">📏 {limiteNum ? `até ${limiteNum} caracteres` : "sem limite de tamanho"}</span>
+        {onAbrirConfig && (
+          <button type="button" onClick={onAbrirConfig} className="ml-auto font-semibold text-indigo-600 hover:underline">
+            ⚙️ Alterar
+          </button>
+        )}
+      </div>
+
+      {/* 1. Dados da aula */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
+      <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">1</span>
+        Dados da aula
+      </p>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="min-w-0" data-tour="serie">
-          <label className="text-xs font-medium text-slate-500">Série</label>
+          <label className="flex h-5 items-center text-xs font-medium text-slate-500">Série</label>
           <select
             className={`${campo} ${!ano ? "border-amber-400 bg-amber-50" : ""}`}
             value={ano}
@@ -617,7 +631,7 @@ export default function RegistroAula({
           </select>
         </div>
         <div className="min-w-0">
-          <div className="flex items-center justify-between gap-1">
+          <div className="flex h-5 items-center justify-between gap-1">
             <label className="text-xs font-medium text-slate-500">Turma</label>
             {situacaoDiario && (
               <button
@@ -654,26 +668,21 @@ export default function RegistroAula({
               usar turma do D.E.V
             </button>
           )}
-          {erroTurmasDiario && <p className="mt-0.5 text-[11px] text-rose-600">{erroTurmasDiario}</p>}
+          {erroTurmasDiario && (
+            <p className="mt-0.5 text-[11px] text-rose-600">
+              {erroTurmasDiario}{" "}
+              <button type="button" onClick={() => setTentativaTurmas((n) => n + 1)} className="font-semibold underline">
+                Tentar de novo
+              </button>
+            </p>
+          )}
         </div>
-        <div className="col-span-2 grid min-w-0 grid-cols-[5.5rem_1fr] gap-2 sm:col-span-1 lg:col-span-2">
-          <div>
-            <label className="text-xs font-medium text-slate-500">UF</label>
-            <select className={`${campo} ${!uf ? "border-amber-400 bg-amber-50" : ""}`} value={uf} onChange={(e) => mudar(setUf, "uf")(e.target.value)}>
-              <option value="">Selecione…</option>
-              <option value="BNCC">BNCC</option>
-              {UFS.map((u) => (
-                <option key={u}>{u}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-slate-500">Data</label>
-            <input type="date" className={campo} value={data} onChange={(e) => setData(e.target.value)} />
-          </div>
+        <div className="min-w-0">
+          <label className="flex h-5 items-center text-xs font-medium text-slate-500">Data</label>
+          <input type="date" className={campo} value={data} onChange={(e) => setData(e.target.value)} />
         </div>
-        <div className="col-span-2 min-w-0 sm:col-span-1" data-tour="periodo">
-          <label className="text-xs font-medium text-slate-500">Período *</label>
+        <div className="min-w-0" data-tour="periodo">
+          <label className="flex h-5 items-center text-xs font-medium text-slate-500">Período</label>
           <select
             className={`${campo} ${!periodo && periodosDisponiveis.length ? "border-amber-400 bg-amber-50" : ""}`}
             value={periodo}
@@ -702,6 +711,7 @@ export default function RegistroAula({
             ))}
           </select>
         </div>
+      </div>
       </div>
 
       {/* Aviso do Diario escolar para a turma e data escolhidas */}
@@ -736,12 +746,6 @@ export default function RegistroAula({
           <b>Plano de aulas › Plano de curso</b> para gerar aulas — as habilidades usadas vêm do plano do período.
         </div>
       )}
-      {!carregandoPlano && periodosDisponiveis.length > 0 && !periodo && (
-        <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Selecione o <b>período</b> da aula ({periodosDisponiveis.map((p) => `${p.numero}º`).join(", ")} {plano?.tipoPeriodo}) — as habilidades usadas
-          vêm do plano de curso desse período.
-        </div>
-      )}
       {periodo > 0 && (
         <p className="-mt-2 text-xs text-slate-500">
           Usando as {habilidadesPeriodo.length} habilidades do plano de curso do {periodo}º {plano?.tipoPeriodo}.
@@ -750,47 +754,16 @@ export default function RegistroAula({
 
       {/* Entrada rapida */}
       <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
-        {/* Tamanho do texto no diario: em destaque, antes de escrever */}
-        <div id="limite-diario" data-tour="limite" className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2.5">
-          <span className="text-sm font-semibold text-indigo-900">📏 Tamanho máximo do texto no diário</span>
-          <span className="flex items-center gap-1.5">
-            <input
-              type="number"
-              min={0}
-              step={100}
-              value={limiteSaida}
-              placeholder="sem limite"
-              onChange={(e) => mudar(setLimiteSaida, "limiteSaida")(e.target.value)}
-              className="w-24 rounded-md border border-indigo-300 bg-white px-2 py-1 text-sm font-semibold text-indigo-900 focus:border-indigo-500 focus:outline-none"
-            />
-            <span className="text-sm text-indigo-900">caracteres</span>
-          </span>
-          <span className="flex flex-wrap gap-1">
-            {ATALHOS_LIMITE.map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => mudar(setLimiteSaida, "limiteSaida")(String(n))}
-                className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                  Number(limiteSaida) === n ? "bg-indigo-600 text-white" : "bg-white text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100"
-                }`}
-              >
-                {n}
-              </button>
-            ))}
-          </span>
-          <span className="w-full text-xs text-indigo-700">
-            Use o limite do campo de registro do seu diário. O texto gerado é ajustado para caber (deixe vazio para não limitar).
-          </span>
-        </div>
-
-        <label className="text-sm font-semibold text-slate-700">O que você trabalhou hoje?</label>
-        <p className="mb-2 text-xs text-slate-500">
-          Escreva do seu jeito, abreviado mesmo — ou clique em <b>🎤 Falar</b> e conte a aula. Confira e edite o texto antes de gerar: a I.A separa por
-          componente e coloca os códigos.
+        <label className="flex items-center gap-2 text-sm font-semibold text-slate-800" htmlFor="texto-aula">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">2</span>
+          O que você trabalhou hoje?
+        </label>
+        <p className="mb-2 mt-1 text-xs text-slate-500">
+          Escreva do seu jeito, abreviado mesmo — ou toque em <b>🎤 Falar</b>. A I.A separa por matéria e coloca os códigos das habilidades.
         </p>
         <textarea
           data-tour="texto"
+          id="texto-aula"
           rows={3}
           className={campo}
           value={texto}
@@ -804,7 +777,7 @@ export default function RegistroAula({
             {ditado.modoGravar ? (
               <>
                 Gravando… {Math.floor(ditado.segundos / 60)}:{String(ditado.segundos % 60).padStart(2, "0")} de {ditado.maxSegundos / 60}:00. Fale a aula e
-                clique em <b>Parar</b>: o texto aparece logo depois.
+                clique em <b>Parar</b>: o texto aparece logo depois. (⚡ a transcrição usa I.A)
               </>
             ) : (
               <>
@@ -834,6 +807,10 @@ export default function RegistroAula({
               {texto.length} / {limiteEntrada}
             </span>
           </div>
+          <div className="flex items-center gap-3">
+          {!gerando && (!periodo || texto.trim().length < 3) && (
+            <span className="text-xs text-slate-400">{!periodo ? "Escolha o período (passo 1)" : "Escreva o que trabalhou"}</span>
+          )}
           <button
             data-tour="gerar"
             onClick={gerar}
@@ -842,7 +819,9 @@ export default function RegistroAula({
           >
             {gerando ? "Gerando..." : "✨ Gerar aula"}
           </button>
+          </div>
         </div>
+        <p className="mt-2 text-right text-[11px] text-amber-700">⚡ Gerar (ou gerar de novo) usa I.A: consome do seu limite do mês (ou dos créditos).</p>
       </div>
 
       {erro && (
@@ -870,8 +849,12 @@ export default function RegistroAula({
 
       {itens && (itens.length > 0 || abertura.length > 0) && (
         <>
+          <p className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">3</span>
+            Confira e salve
+          </p>
           {/* Momentos sem componente: Acolhida, Rotina diaria... (entram no inicio do texto) */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="rounded-xl border border-slate-200 bg-white p-4" data-tour="aula-momentos">
             <label className="text-xs font-semibold text-slate-600">Momentos da aula (sem habilidade) — um por linha</label>
             <textarea
               rows={Math.max(2, abertura.length)}
@@ -899,7 +882,7 @@ export default function RegistroAula({
             ))}
           </div>
 
-          <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 sm:p-4">
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 sm:p-4" data-tour="aula-texto">
             <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <span className="text-sm font-semibold text-slate-700">Texto para o diário · 📅 {data.split("-").reverse().join("/")}</span>
               <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
@@ -982,7 +965,7 @@ export default function RegistroAula({
                       disabled={formatando}
                       className="font-medium text-indigo-700 underline hover:text-indigo-900 disabled:opacity-50"
                     >
-                      {formatando ? "Refazendo…" : "Refazer no meu formato (I.A)"}
+                      {formatando ? "Refazendo…" : "Refazer no meu formato (⚡ usa I.A)"}
                     </button>
                   </>
                 )}
@@ -1000,7 +983,7 @@ export default function RegistroAula({
               </p>
             )}
             {idTurmaDiario && situacaoDiario?.conectado && (
-              <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+              <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-slate-700" data-tour="aula-dev">
                 <input
                   type="checkbox"
                   className="h-4 w-4 accent-indigo-600"
@@ -1016,16 +999,18 @@ export default function RegistroAula({
             <div className="mt-4 flex flex-wrap gap-2 sm:justify-end">
               {!editandoTexto && (
                 <button
+                  data-tour="aula-editar"
                   onClick={() => setEditandoTexto(true)}
                   className="flex-1 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-4 py-2.5 sm:mr-auto sm:flex-none sm:py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 >
                   ✏️ Editar texto
                 </button>
               )}
-              <button onClick={copiar} className="flex-1 whitespace-nowrap rounded-lg border border-indigo-300 bg-white px-4 py-2.5 sm:flex-none sm:py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50">
+              <button onClick={copiar} data-tour="aula-copiar" className="flex-1 whitespace-nowrap rounded-lg border border-indigo-300 bg-white px-4 py-2.5 sm:flex-none sm:py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50">
                 Copiar texto
               </button>
               <button
+                data-tour="aula-salvar"
                 onClick={() => salvar()}
                 disabled={salvando || excede || foraDoPlano.length > 0 || !textoFinal.trim() || !periodo}
                 className="basis-full rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold sm:basis-auto sm:py-2 text-white hover:bg-emerald-700 disabled:opacity-50"

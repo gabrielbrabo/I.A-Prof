@@ -8,6 +8,8 @@ const usoSchema = new Schema(
     custoCentavos: { type: Number, default: 0 },
     chamadas: { type: Number, default: 0 },
     aulas: { type: Number, default: 0 },
+    atividades: { type: Number, default: 0 },
+    correcoes: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

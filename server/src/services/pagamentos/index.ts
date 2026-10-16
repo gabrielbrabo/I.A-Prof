@@ -13,6 +13,12 @@ const gatewayDev: Gateway = {
   async consultarStatus() {
     return "active";
   },
+  async criarCobranca() {
+    return { paymentId: `dev-pay-${Date.now()}`, pago: true, checkoutUrl: null };
+  },
+  async cobrancaPaga() {
+    return true;
+  },
   async cancelar() {},
   async reativar() {},
 };

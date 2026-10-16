@@ -5,6 +5,8 @@ import { codigosForaDoPeriodo, ErroRegistro, formatarNoEstilo, gerarRegistroAula
 import { formatarComLimite } from "../utils/formatarRegistro";
 import { limites } from "../config/limites";
 import { comMedicao, exigirAcesso, SemAcesso } from "../services/uso";
+import { diario } from "../services/diario";
+import { tokenDo } from "./diarioController";
 
 // Limite de saida: o professor pode informar o limite do campo do diario; senao vale o do .env
 const limiteSaidaSchema = z.number().int().min(0).max(100000).nullish();
@@ -34,7 +36,7 @@ export async function gerar(req: Request, res: Response) {
   const p = gerarSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ message: p.error.issues[0]?.message ?? "Dados invalidos" });
   try {
-    await exigirAcesso(req.usuarioId!); // teste gratis / assinatura / limite do mes
+    await exigirAcesso(req.usuarioId!, { abrirLote: "aula", recurso: "aula" }); // teste gratis / assinatura / limite do mes
     const r = await comMedicao(
       req.usuarioId!,
       () => gerarRegistroAula({ ...p.data, usuario: req.usuarioId!, limiteSaida: p.data.limiteSaida ?? limites.registro }),
@@ -194,7 +196,8 @@ export async function formatar(req: Request, res: Response) {
   const p = formatarSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ message: "Dados invalidos" });
   try {
-    await exigirAcesso(req.usuarioId!);
+    // formatar faz parte da aula que acabou de ser gerada: termina mesmo se o limite acabou na geracao
+    await exigirAcesso(req.usuarioId!, { continuarLote: "aula" });
     const texto = await comMedicao(req.usuarioId!, () =>
       formatarNoEstilo({ ...p.data, usuario: req.usuarioId!, limite: p.data.limiteSaida ?? limites.registro })
     );
@@ -220,7 +223,27 @@ export async function listar(req: Request, res: Response) {
 }
 
 // DELETE /api/registro-aula/:id
+// Aula ja enviada ao D.E.V: so pode ser excluida aqui depois de excluida no D.E.V (evita diario e I.A Prof diferentes)
 export async function remover(req: Request, res: Response) {
-  await RegistroAula.deleteOne({ _id: req.params.id, usuario: req.usuarioId });
+  const r = await RegistroAula.findOne({ _id: req.params.id, usuario: req.usuarioId }).lean();
+  if (!r) return res.status(204).end();
+  if (r.diarioEnviadoEm && r.diarioTurmaId) {
+    const token = await tokenDo(req.usuarioId!);
+    if (!token) {
+      return res.status(409).json({ message: "Esta aula foi enviada ao D.E.V. Conecte sua conta do D.E.V para conferir se ela já foi excluída lá.", noDiario: true });
+    }
+    try {
+      const v = await diario.verificarAula(token, r.diarioTurmaId, r.data);
+      if (!v.podeRegistrar) {
+        return res.status(409).json({ message: `Não deu para conferir no D.E.V (${v.motivo ?? "data indisponível"}). Exclua a aula no D.E.V e tente de novo.`, noDiario: true });
+      }
+      if (v.existe && (!r.diarioRegistroId || v.id === r.diarioRegistroId)) {
+        return res.status(409).json({ message: "Esta aula está no D.E.V. Exclua primeiro no D.E.V; depois ela pode ser excluída aqui.", noDiario: true });
+      }
+    } catch {
+      return res.status(503).json({ message: "Não deu para falar com o D.E.V agora para conferir. Tente de novo em instantes." });
+    }
+  }
+  await RegistroAula.deleteOne({ _id: r._id });
   res.status(204).end();
 }

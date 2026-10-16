@@ -1,12 +1,13 @@
 // Navegacao por FERRAMENTAS: cada ferramenta e um botao no topo (celular: barra de baixo)
 // com seus sub-botoes logo abaixo do cabecalho. Para uma ferramenta nova, acrescente um item em FERRAMENTAS.
-export type Tela = "registro" | "plano" | "historico" | "assinatura";
+export type Tela = "registro" | "plano" | "historico" | "atividade" | "atividades" | "turmas" | "assinatura" | "config";
 
 export interface ItemFerramenta {
   id: Tela;
   rotulo: string;
   icone: string;
   tour?: string;
+  curto?: string; // nome curto na barra de sub-botoes do celular
 }
 export interface Ferramenta {
   id: string;
@@ -28,6 +29,20 @@ export const FERRAMENTAS: Ferramenta[] = [
       { id: "historico", rotulo: "Aulas salvas", icone: "🗂️", tour: "aba-historico" },
     ],
   },
+  {
+    id: "atividades",
+    rotulo: "Atividades",
+    curto: "Atividades",
+    icone: "📝",
+    itens: [
+      { id: "atividade", rotulo: "Gerar atividade", curto: "Gerar", icone: "✨", tour: "aba-atividade" },
+      { id: "plano", rotulo: "Plano de curso", curto: "Plano", icone: "📘", tour: "aba-plano-ativ" },
+      { id: "atividades", rotulo: "Atividades e correção", curto: "Correção", icone: "✅", tour: "aba-atividades" },
+      { id: "turmas", rotulo: "Turmas e alunos", curto: "Turmas", icone: "👥", tour: "aba-turmas" },
+    ],
+  },
 ];
 
-export const ferramentaDa = (t: Tela) => FERRAMENTAS.find((f) => f.itens.some((i) => i.id === t)) ?? null;
+// Ferramenta da tela. Telas que estao em mais de uma ferramenta (Plano de curso) ficam na que o professor abriu.
+export const ferramentaDa = (t: Tela, preferida?: string | null) =>
+  FERRAMENTAS.find((f) => f.id === preferida && f.itens.some((i) => i.id === t)) ?? FERRAMENTAS.find((f) => f.itens.some((i) => i.id === t)) ?? null;

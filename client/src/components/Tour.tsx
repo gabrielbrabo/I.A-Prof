@@ -139,7 +139,7 @@ export const PASSOS_INICIO: PassoTour[] = [
   {
     alvo: "menu",
     titulo: "O menu",
-    texto: "Toque em ☰ para abrir o menu: Plano de aulas (Gerar aula, Plano de curso, Aulas salvas), Minha assinatura, Como usar, Instalar app e Sair.",
+    texto: "Toque em ☰ para abrir o menu: Plano de aulas, Atividades, Minha assinatura, Como usar, Instalar app e Sair.",
   },
   {
     alvo: "ferramenta-aulas",
@@ -151,16 +151,16 @@ export const PASSOS_INICIO: PassoTour[] = [
     titulo: "1º passo: o plano de curso",
     texto: "Antes de gerar aulas, envie o plano de curso da sua série neste botão. As habilidades (códigos BNCC) das aulas vêm dele.",
   },
-  { alvo: "serie", titulo: "Série e UF", texto: "Escolha a série e o estado. Fica guardado para as próximas vezes." },
+  { alvo: "serie", titulo: "Série e turma", texto: "Escolha a série e a turma da aula. Fica guardado para as próximas vezes." },
   {
     alvo: "periodo",
     titulo: "Período da aula",
     texto: "Escolha o bimestre/trimestre. A I.A usa só as habilidades do plano desse período.",
   },
   {
-    alvo: "limite",
-    titulo: "Tamanho do texto",
-    texto: "Coloque o limite de caracteres do campo de registro do seu diário. O texto gerado é ajustado para caber.",
+    alvo: "config-barra",
+    titulo: "Suas configurações",
+    texto: "Seu nome, estado e o tamanho do texto do diário ficam aqui. Para mudar, toque em ⚙️ Alterar.",
   },
   {
     alvo: "texto",
@@ -173,6 +173,11 @@ export const PASSOS_INICIO: PassoTour[] = [
     titulo: "Gerar aula",
     texto: "A I.A separa por matéria e coloca os códigos. Confira os cards (os que piscam pedem ✓ Conferi) e clique em Aprovar e salvar.",
   },
+  {
+    alvo: "ferramenta-atividades",
+    titulo: "Atividades",
+    texto: "Gere atividades com gabarito, imprima, corrija com foto ou à mão e lance as notas (no D.E.V ou numa lista aqui).",
+  },
   { alvo: "uso", titulo: "Uso do mês", texto: "Aqui você acompanha quanto já usou da I.A neste mês. Renova todo dia 1º." },
   {
     alvo: "dev",
@@ -180,7 +185,8 @@ export const PASSOS_INICIO: PassoTour[] = [
     texto: "Se sua escola usa o D.E.V, conecte aqui com seu CPF e senha do D.E.V: a aula salva vai direto para o diário da turma.",
   },
   { alvo: "aba-historico", titulo: "Aulas salvas", texto: "Todas as aulas ficam aqui para copiar, editar ou enviar ao D.E.V." },
-  { alvo: "ajuda", titulo: "Ficou com dúvida?", texto: "Em ❓ Como usar você vê o passo a passo e deixa rever este tour quando quiser." },
+  { alvo: "ajuda", titulo: "Ficou com dúvida?", texto: "Em ❓ Como usar você vê o passo a passo e pode rever este tour quando quiser." },
+  { alvo: "config", titulo: "Configurações", texto: "Em ⚙️ você muda seu nome, estado, tamanho do texto, conecta o D.E.V e troca o tema." },
 ];
 
 // Passos do tour da tela Plano de curso. Partes que so aparecem depois (envio, revisao) usam o
@@ -216,7 +222,7 @@ export const PASSOS_PLANO: PassoTour[] = [
   {
     alvo: ["pc-arquivo", "pc-envio", "pc-cabecalho"],
     titulo: "Enviar o arquivo",
-    texto: "Toque em “Escolher arquivo” e selecione o PDF, Word, Excel, CSV ou TXT. A leitura é automática, sem I.A e sem gastar o seu limite.",
+    texto: "Toque na área 📎 (ou arraste o arquivo) e escolha o PDF, Word, Excel, CSV ou TXT. A leitura é automática, sem I.A e sem gastar o seu limite.",
   },
   {
     alvo: ["pc-periodos", "pc-cabecalho"],
@@ -233,4 +239,80 @@ export const PASSOS_PLANO: PassoTour[] = [
     titulo: "Salvar o plano",
     texto: "Clique em Salvar. Pronto: as aulas em Gerar aula passam a usar as habilidades deste plano.",
   },
+];
+
+// Passos do tour da tela Gerar atividade (primeira vez em Atividades)
+// Depois da 1a aula gerada: como conferir, editar, trocar habilidades e salvar
+export const PASSOS_AULA_PRONTA: PassoTour[] = [
+  { alvo: "aula-momentos", titulo: "Sua aula foi gerada! 🎉", texto: "Agora confira antes de salvar. Aqui ficam os momentos sem habilidade (acolhida, rotina…). Pode escrever, mudar ou apagar." },
+  { alvo: "aula-conteudo", titulo: "Conteúdo de cada matéria", texto: "Cada card é uma matéria. Toque no texto para corrigir o conteúdo do jeito que você trabalhou." },
+  { alvo: "aula-habilidades", titulo: "Habilidades", texto: "Estas são as habilidades que a I.A escolheu do seu plano de curso. Toque no ✕ para tirar uma." },
+  { alvo: "aula-add-hab", titulo: "Adicionar habilidade", texto: "Faltou alguma? Escolha aqui outra habilidade do plano deste período." },
+  { alvo: "aula-conferi", titulo: "Card em amarelo", texto: "A I.A ficou em dúvida neste card. Confira as habilidades e toque em ✓ Conferi." },
+  { alvo: "aula-remover", titulo: "Remover matéria", texto: "Se um card não faz parte da aula, toque em remover." },
+  { alvo: "aula-texto", titulo: "Texto para o diário", texto: "Este é o texto final, montado a partir dos cards. Ele se atualiza quando você muda os cards." },
+  { alvo: "aula-editar", titulo: "Editar o texto", texto: "Quer mudar alguma palavra no texto final? Toque em ✏️ Editar texto." },
+  { alvo: "aula-copiar", titulo: "Copiar", texto: "Copia o texto para colar em outro lugar." },
+  { alvo: "aula-dev", titulo: "Enviar ao D.E.V", texto: "Deixe marcado para a aula ir direto para o seu diário no D.E.V ao salvar." },
+  { alvo: "aula-salvar", titulo: "Aprovar e salvar", texto: "Tudo certo? Toque em Aprovar e salvar. A aula fica em Aulas salvas. Gerar de novo usa I.A e consome do seu limite." },
+];
+
+// Depois da 1a atividade gerada: conferir, ajustar, aprovar o gabarito e salvar
+export const PASSOS_ATIV_PRONTA: PassoTour[] = [
+  { alvo: "ativ-pronta", titulo: "Sua atividade foi gerada! 🎉", texto: "Ela ainda NÃO está salva. Siga os passos: ver a folha, conferir o gabarito e aprovar e salvar." },
+  { alvo: "ativ-ver", titulo: "Ver a folha", texto: "Mostra a folha do jeito que vai sair na impressão, antes de salvar." },
+  { alvo: "ativ-ajuste", titulo: "Pedir ajuste à I.A", texto: "Não gostou de algo? Escreva o que mudar (ex.: melhore as imagens, letra maior). Cada ajuste consome do seu limite de I.A." },
+  { alvo: "ativ-editar", titulo: "Editar à mão", texto: "Aqui você muda questões, imagens, cabeçalho e o visual da folha, sem gastar I.A." },
+  { alvo: "ativ-questao", titulo: "Confira cada questão", texto: "Leia o enunciado e as alternativas. Pode trocar o tipo, mudar o texto ou apagar a questão." },
+  { alvo: "ativ-gabarito", titulo: "Aprove o gabarito", texto: "Confira a resposta certa de cada questão (a marcada em verde). É por ela que os alunos são corrigidos." },
+  { alvo: "ativ-valor-q", titulo: "Valor de cada questão", texto: "Ajuste quanto cada questão vale. A soma é o valor total da atividade." },
+  { alvo: "ativ-salvar", titulo: "Aprovar e salvar", texto: "Com o gabarito conferido, toque em Aprovar e salvar. A atividade vai para Atividades e correção." },
+  { alvo: "ativ-salvar-corrigir", titulo: "Ou salvar e corrigir", texto: "Se já tem as folhas dos alunos, salve e vá direto corrigir." },
+];
+
+export const PASSOS_ATIVIDADE: PassoTour[] = [
+  {
+    alvo: ["ferramenta-atividades", "menu"],
+    titulo: "Atividades",
+    texto: "Aqui você gera atividades com gabarito, corrige (com foto ou à mão) e lança as notas.",
+  },
+  { alvo: "ativ-serie", titulo: "Série", texto: "Escolha a série da turma." },
+  {
+    alvo: "ativ-turma",
+    titulo: "Turma",
+    texto: "Turmas do D.E.V aparecem sozinhas se você estiver conectado. Sem D.E.V, crie a turma colando a lista de alunos (ou deixe para a hora de corrigir).",
+  },
+  { alvo: "ativ-periodo", titulo: "Período", texto: "Escolha o bimestre/trimestre. As habilidades vêm do plano de curso desse período." },
+  {
+    alvo: "ativ-materia",
+    titulo: "Matéria",
+    texto: "Conectado ao D.E.V, escolha a matéria da lista do D.E.V. Sem D.E.V, digite a matéria.",
+  },
+  {
+    alvo: "ativ-habilidades",
+    titulo: "Habilidades",
+    texto: "Marque as habilidades do plano de curso que a atividade vai trabalhar. A I.A monta as questões em cima delas.",
+  },
+  { alvo: "ativ-valor", titulo: "Valor total", texto: "Quanto a atividade vale. A I.A divide entre as questões e você pode ajustar depois." },
+  {
+    alvo: "ativ-detalhes",
+    titulo: "Como deve ser a atividade",
+    texto: "Diga o tema, a quantidade e os tipos de questão: marcar X, V ou F, discursiva ou completar.",
+  },
+  {
+    alvo: "ativ-gerar",
+    titulo: "Gerar",
+    texto: "A I.A cria as questões e o gabarito. Confira, ajuste os valores e clique em Aprovar e salvar. Dá para imprimir ou salvar em PDF.",
+  },
+  {
+    alvo: ["aba-plano-ativ", "menu"],
+    titulo: "Plano de curso",
+    texto: "É o mesmo plano das aulas. Sem ele, não aparecem habilidades para escolher.",
+  },
+  {
+    alvo: ["aba-atividades", "menu"],
+    titulo: "Atividades e correção",
+    texto: "Suas atividades salvas ficam aqui: veja, edite, imprima ou corrija. Para corrigir, escolha a atividade, toque no aluno e corrija com foto (I.A) ou à mão. Aprove e lance as notas no D.E.V ou salve a lista aqui.",
+  },
+  { alvo: ["aba-turmas", "menu"], titulo: "Turmas e alunos", texto: "Suas turmas com a lista de alunos (para quem não usa o D.E.V)." },
 ];

@@ -15,6 +15,7 @@ const SECOES: Secao[] = [
     icone: "🚀",
     titulo: "Primeiros passos",
     passos: [
+      "Na primeira entrada, o I.A Prof pede seu nome, a série, o estado e o tamanho do texto do diário. Dá para mudar depois em ⚙️ Configurações.",
       "Toque em 📚 Plano de aulas e depois em Plano de curso. Escolha a série, a UF, o ano letivo e a divisão do ano (bimestre, trimestre ou semestre).",
       "Envie o arquivo do plano (PDF, Word, Excel, CSV ou TXT). Pode ser o plano do ano todo ou de um período por vez.",
       "Confira as habilidades em cada aba de período. Se faltar alguma, use “+ Adicionar habilidade manualmente”.",
@@ -27,8 +28,8 @@ const SECOES: Secao[] = [
     icone: "✨",
     titulo: "Gerar uma aula",
     passos: [
-      "Em 📚 Plano de aulas › Gerar aula, confira série, turma, UF, data e o período da aula.",
-      "Ajuste o tamanho máximo do texto para o limite do campo do seu diário.",
+      "Em 📚 Plano de aulas › Gerar aula, confira série, turma, data e o período da aula (passo 1).",
+      "Seu nome, estado e o tamanho máximo do texto do diário ficam em ⚙️ Configurações — é só uma vez.",
       "Escreva como foi a aula, do seu jeito (ex.: “mat tabuada, port leitura de fábula”), ou toque em 🎤 Falar.",
       "Clique em ✨ Gerar aula. A I.A separa por matéria e escolhe as habilidades do plano do período.",
       "Confira cada card. Os que piscam em amarelo são palpites: veja as habilidades e clique em ✓ Conferi.",
@@ -72,13 +73,43 @@ const SECOES: Secao[] = [
     dica: "Conectado ao D.E.V, o nome do professor nas aulas é o do seu cadastro no D.E.V.",
   },
   {
+    id: "atividades",
+    icone: "📝",
+    titulo: "Gerar atividade",
+    passos: [
+      "Em 📝 Atividades › Gerar atividade, escolha série, turma e período. Matéria: conectado ao D.E.V vem da lista do D.E.V; sem D.E.V, digite.",
+      "Marque as habilidades do plano de curso (do período e da matéria) que a atividade vai trabalhar. O plano é o mesmo das aulas (📝 Atividades › Plano de curso).",
+      "Escreva como quer a atividade: tema, quantidade e tipos (marcar X, V ou F, discursiva, completar). Ex.: “8 questões de frações, 4 de marcar X, 2 V ou F e 2 discursivas”.",
+      "Peça do seu jeito: imagens chamativas, letra grande, colorida, logo da escola no cabeçalho, sem nota… Use 🖼️ Adicionar imagens para mandar a logo ou figuras do seu computador.",
+      "Clique em ✨ Gerar atividade. A I.A segue o seu pedido em cima das habilidades marcadas. Se faltar algo (ex.: a logo), ela pergunta antes.",
+      "Não ficou do jeito? Use ✏️ “Quer mudar algo? Peça à I.A” (ex.: “deixe a questão 3 mais fácil”) ou edite à mão: questões, imagens, cabeçalho e letra.",
+      "Confira e edite: questões, resposta certa de cada uma e o valor. Se a soma não bater com o valor total, use “Ajustar para somar”.",
+      "Clique em ✓ Aprovar e salvar. Use 🖨️ Imprimir / PDF para a folha dos alunos (sem gabarito) e 🔑 para o gabarito.",
+    ],
+    dica: "Sem D.E.V, a turma e os alunos podem ser cadastrados em 👥 Turmas e alunos ou na hora da primeira correção, colando a lista de nomes.",
+  },
+  {
+    id: "corrigir",
+    icone: "✅",
+    titulo: "Corrigir e lançar notas",
+    passos: [
+      "Em 📝 Atividades › Atividades e correção, clique em ✅ Corrigir na atividade.",
+      "Toque no nome do aluno e escolha: 📷 Corrigir com foto (a I.A corrige pelo gabarito) ou ✍️ Corrigir à mão (não usa I.A).",
+      "Confira a correção: questões em amarelo são dúvidas da I.A. Ajuste o que precisar.",
+      "Clique em ✓ Aprovar e próximo. Só as correções aprovadas viram nota.",
+      "No fim, clique em Lançar notas no D.E.V (turma do D.E.V) ou Salvar lista de notas. Dá para imprimir a lista.",
+    ],
+    dica: "Se o limite de I.A acabar no meio da turma, você ainda termina de corrigir os alunos daquela atividade. Outra atividade com foto fica bloqueada, mas à mão continua liberado.",
+  },
+  {
     id: "assinatura",
     icone: "💳",
     titulo: "Assinatura e uso da I.A",
     passos: [
       "A barra “Uso de I.A neste mês” mostra quanto você já usou. O limite renova todo dia 1º.",
-      "No teste grátis você pode usar por alguns dias ou um número de aulas, o que acabar primeiro.",
+      "Teste grátis: 30 dias, com 30 aulas e 10 atividades. Em Atividades, o teste gera, imprime, corrige à mão e lança notas; a correção com foto (I.A) é dos planos pagos.",
       "Em 💳 Minha assinatura você escolhe o plano e paga com PIX (QR Code na tela) ou cartão (cobrança automática).",
+      "Acabou o limite e precisa terminar um trabalho? Em ⚡ Créditos extras você escolhe um valor e paga uma vez. O saldo não vence e só é usado depois do limite do mês.",
     ],
   },
   {
@@ -86,14 +117,14 @@ const SECOES: Secao[] = [
     icone: "📲",
     titulo: "Instalar no celular ou computador",
     passos: [
-      "Toque em 📲 Instalar (ou em “Instalar o app” na tela de entrada).",
+      "No celular, abra o menu ☰ e toque em 📲 Instalar app (ou em “Instalar o app” na tela de entrada).",
       "No iPhone: abra no Safari, toque em Compartilhar e em “Adicionar à Tela de Início”.",
       "O I.A Prof abre direto da tela inicial, como um aplicativo.",
     ],
   },
 ];
 
-export default function ComoUsar({ onFechar, onRever }: { onFechar: () => void; onRever: (qual: "inicio" | "plano") => void }) {
+export default function ComoUsar({ onFechar, onRever }: { onFechar: () => void; onRever: (qual: "inicio" | "plano" | "atividade") => void }) {
   const [aberta, setAberta] = useState<string | null>("comecar");
 
   return (
@@ -110,7 +141,7 @@ export default function ComoUsar({ onFechar, onRever }: { onFechar: () => void; 
         </div>
 
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Tour guiado (mostra na tela onde clicar)</p>
-        <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
           <button
             onClick={() => onRever("inicio")}
             className="flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-left hover:bg-indigo-100"
@@ -129,6 +160,16 @@ export default function ComoUsar({ onFechar, onRever }: { onFechar: () => void; 
             <span>
               <span className="block text-sm font-semibold text-indigo-900">Tour: Plano de curso</span>
               <span className="block text-xs text-indigo-800">Como enviar, conferir e salvar o plano.</span>
+            </span>
+          </button>
+          <button
+            onClick={() => onRever("atividade")}
+            className="flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-left hover:bg-indigo-100"
+          >
+            <span className="text-2xl">📝</span>
+            <span>
+              <span className="block text-sm font-semibold text-indigo-900">Tour: Atividades</span>
+              <span className="block text-xs text-indigo-800">Gerar, corrigir e lançar notas.</span>
             </span>
           </button>
         </div>

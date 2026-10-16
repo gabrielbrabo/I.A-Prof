@@ -9,9 +9,10 @@ export class ErroDiario extends Error {
 
 async function chamar<T>(metodo: "GET" | "POST", caminho: string, corpo?: unknown, token?: string): Promise<T> {
   if (!diarioLigado()) throw new ErroDiario("Integração com o D.E.V não configurada no servidor.", 503);
-  let resp: Response;
-  try {
-    resp = await fetch(`${env.diario.url}/integracao/iaprof${caminho}`, {
+  let resp: Response | null = null;
+  // O D.E.V pode estar "acordando" ou oscilar: tenta de novo uma vez antes de dar erro
+  const tentar = () =>
+    fetch(`${env.diario.url}/integracao/iaprof${caminho}`, {
       method: metodo,
       headers: {
         "Content-Type": "application/json",
@@ -19,8 +20,22 @@ async function chamar<T>(metodo: "GET" | "POST", caminho: string, corpo?: unknow
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: corpo ? JSON.stringify(corpo) : undefined,
-      signal: AbortSignal.timeout(60000), // Diario no plano gratis pode estar "acordando"
+      signal: AbortSignal.timeout(45000),
     });
+  try {
+    try {
+      resp = await tentar();
+      if ([502, 503, 504].includes(resp.status)) throw Object.assign(new Error("gateway"), { cause: { code: `HTTP_${resp.status}` } });
+    } catch (primeiro) {
+      // so repete em falha de rede / servidor fora; erros de regra (4xx) nao.
+      // POST so repete quando o pedido certamente nao chegou ao D.E.V (evita gravar duas vezes).
+      const cod = (primeiro as { cause?: { code?: string } }).cause?.code ?? (primeiro as Error).name ?? "";
+      const naoChegou = ["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "HTTP_502", "HTTP_503"].includes(cod);
+      if (metodo === "POST" && !naoChegou) throw primeiro;
+      console.warn(`[diario] nova tentativa ${caminho.split("?")[0]}:`, (primeiro as { cause?: { code?: string } }).cause?.code ?? (primeiro as Error).name);
+      await new Promise((r) => setTimeout(r, 2500));
+      resp = await tentar();
+    }
   } catch (e) {
     // Mostra o motivo real (sem expor a chave) para facilitar achar o problema de configuracao
     const err = e as { name?: string; cause?: { code?: string; message?: string }; message?: string };
@@ -38,6 +53,7 @@ async function chamar<T>(metodo: "GET" | "POST", caminho: string, corpo?: unknow
               : `erro de conexão (${codigo || "desconhecido"}).`;
     throw new ErroDiario(`Não foi possível falar com o D.E.V: ${motivo}`, 502);
   }
+  if (!resp) throw new ErroDiario("Não foi possível falar com o D.E.V agora. Tente de novo.", 502);
   const dados = (await resp.json().catch(() => ({}))) as Record<string, unknown>;
   if (resp.status === 404 && !dados.msg) {
     // rota nao existe: D.E.V sem a atualizacao da integracao ou DIARIO_API_URL apontando para o lugar errado
@@ -55,6 +71,17 @@ export interface TurmaDiario {
   turno?: string;
   escola: string;
   papel: "REGENTE" | "ED_FISICA";
+  nivel?: string;
+  notas?: boolean; // false = escola com conceitos (Educacao Infantil): atividades nao vao para o D.E.V
+}
+
+export interface AlunosDiario {
+  papel: "REGENTE" | "ED_FISICA";
+  alunos: Array<{ id: string; nome: string }>;
+  materias: Array<{ id: string; nome: string }>;
+  periodos: Array<{ label: string; aberto: boolean; totalPontos: number }>;
+  notas?: boolean;
+  nivel?: string;
 }
 
 export const diario = {
@@ -69,4 +96,25 @@ export const diario = {
     ),
   registrarAula: (token: string, corpo: { id_turma: string; data: string; descricao: string; modo?: "substituir" | "juntar" }) =>
     chamar<{ ok: boolean; id: string; acao: "criada" | "substituida" | "juntada" }>("POST", "/aulas", corpo, token),
+  alunos: (token: string, idTurma: string) => chamar<AlunosDiario>("GET", `/turmas/${encodeURIComponent(idTurma)}/alunos`, undefined, token),
+  pontos: (token: string, q: { id_turma: string; bimestre: string; id_matter: string; excluir?: string | null }) =>
+    chamar<{ total: number; usado: number; restante: number | null; aberto: boolean }>(
+      "GET",
+      `/atividades/pontos?${new URLSearchParams(Object.entries(q).filter(([, v]) => v) as [string, string][]).toString()}`,
+      undefined,
+      token
+    ),
+  registrarAtividade: (
+    token: string,
+    corpo: {
+      id_turma: string;
+      bimestre: string;
+      id_matter: string;
+      descricao: string;
+      tipo: string;
+      valor: number;
+      idAtividade?: string | null;
+      notas: Array<{ id_student: string; nota: number }>;
+    }
+  ) => chamar<{ ok: boolean; idAtividade: string; criadas: number; atualizadas: number }>("POST", "/atividades", corpo, token),
 };

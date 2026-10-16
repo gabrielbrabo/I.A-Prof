@@ -45,6 +45,8 @@ export async function lerResposta<T>(resp: Response): Promise<T> {
   if (resp.status === 204) return undefined as T;
   const dados = (await resp.json().catch(() => ({}))) as { message?: string; semAcesso?: boolean };
   if (resp.status === 401 && lerToken()) sair();
+  // Sem limite de I.A / sem plano: o App mostra o aviso (com comprar creditos / mudar de plano)
+  if (resp.status === 402) window.dispatchEvent(new CustomEvent("iaprof:semAcesso", { detail: dados.message || "" }));
   if (!resp.ok) throw new ErroApi(dados.message || `Erro ${resp.status}`, resp.status, !!dados.semAcesso);
   return dados as T;
 }

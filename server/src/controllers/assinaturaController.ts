@@ -5,6 +5,8 @@ import { PLANOS, planoPorId, precoDoCiclo } from "../config/planos";
 import { Assinatura } from "../models/Assinatura";
 import { Usuario } from "../models/Usuario";
 import { gateway } from "../services/pagamentos";
+import { CompraCredito } from "../models/CompraCredito";
+import { creditarCompra } from "./creditoController";
 import { assinaturaValida, situacaoDoUsuario } from "../services/uso";
 
 // GET /api/assinatura/planos -> planos (precos em centavos) — o limite de I.A nao e exibido
@@ -152,9 +154,16 @@ export async function webhook(req: Request, res: Response) {
   if (env.payments.webhookSecret && req.headers["asaas-access-token"] !== env.payments.webhookSecret) {
     return res.status(401).json({ message: "token inválido" });
   }
-  const ev = req.body as { id?: string; event?: string; payment?: { subscription?: string; dueDate?: string }; subscription?: { id?: string } };
+  const ev = req.body as { id?: string; event?: string; payment?: { id?: string; subscription?: string; dueDate?: string }; subscription?: { id?: string } };
   const subId = ev.payment?.subscription ?? ev.subscription?.id;
-  if (!subId) return res.json({ ok: true });
+  if (!subId) {
+    // cobranca avulsa: compra de creditos extras
+    if (ev.payment?.id && (ev.event === "PAYMENT_CONFIRMED" || ev.event === "PAYMENT_RECEIVED")) {
+      const c = await CompraCredito.findOne({ providerPaymentId: ev.payment.id }).lean();
+      if (c) await creditarCompra(String(c._id));
+    }
+    return res.json({ ok: true });
+  }
   const a = await Assinatura.findOne({ providerSubscriptionId: subId });
   if (!a || (ev.id && a.ultimoEvento === ev.id)) return res.json({ ok: true });
   if (ev.event === "PAYMENT_CONFIRMED" || ev.event === "PAYMENT_RECEIVED") {

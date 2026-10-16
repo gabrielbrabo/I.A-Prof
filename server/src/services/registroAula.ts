@@ -196,7 +196,7 @@ interface PeriodoLean {
 }
 
 // Periodo do plano de curso escolhido pelo professor. Erro claro se nao houver plano para ele.
-async function periodoDoPlano(usuario: string, ano: string, anoLetivo: number, periodo: number, turma?: string | null) {
+export async function periodoDoPlano(usuario: string, ano: string, anoLetivo: number, periodo: number, turma?: string | null) {
   const plano =
     (turma ? await PlanoCurso.findOne({ usuario, ano, anoLetivo, turma }).lean() : null) ??
     (await PlanoCurso.findOne({ usuario, ano, anoLetivo }).sort({ updatedAt: -1 }).lean());

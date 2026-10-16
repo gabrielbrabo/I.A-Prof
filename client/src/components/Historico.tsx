@@ -5,7 +5,7 @@ import { diarioApi, ErroAulaNoDiario } from "../api/diario";
 import { ModalConflitoDiario } from "./Diario";
 
 // Lista dos ultimos registros salvos
-export default function Historico({ atualizar, onAbrir }: { atualizar: number; onAbrir: (r: RegistroSalvo) => void }) {
+export default function Historico({ atualizar, onAbrir, onNova }: { atualizar: number; onAbrir: (r: RegistroSalvo) => void; onNova?: () => void }) {
   const [lista, setLista] = useState<RegistroSalvo[]>([]);
   const [copiado, setCopiado] = useState<string | null>(null);
   // Envio ao Diario escolar
@@ -39,11 +39,31 @@ export default function Historico({ atualizar, onAbrir }: { atualizar: number; o
   }
 
   async function remover(id: string) {
-    await registroApi.remover(id);
-    setLista((l) => l.filter((r) => r._id !== id));
+    setMsgDiario(null);
+    try {
+      await registroApi.remover(id);
+      setLista((l) => l.filter((r) => r._id !== id));
+    } catch (e) {
+      // aula que ainda esta no D.E.V: precisa excluir la primeiro
+      setMsgDiario({ id, ok: false, texto: e instanceof Error ? e.message : "Não foi possível excluir" });
+    }
   }
 
-  if (!lista.length) return <p className="text-sm text-slate-400">Nenhuma aula salva ainda.</p>;
+  if (!lista.length)
+    return (
+      <div className="mx-auto max-w-md rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
+        <p className="text-4xl" aria-hidden>
+          🗂️
+        </p>
+        <p className="mt-2 text-base font-semibold text-slate-800">Nenhuma aula salva ainda</p>
+        <p className="mt-1 text-sm text-slate-500">As aulas que você gerar e aprovar aparecem aqui para copiar, editar ou enviar ao D.E.V.</p>
+        {onNova && (
+          <button onClick={onNova} className="mt-4 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
+            ✨ Gerar minha primeira aula
+          </button>
+        )}
+      </div>
+    );
 
   return (
     <>

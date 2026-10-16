@@ -6,6 +6,9 @@ import * as voz from "../controllers/vozController";
 import * as auth from "../controllers/authController";
 import * as ass from "../controllers/assinaturaController";
 import * as dia from "../controllers/diarioController";
+import * as cred from "../controllers/creditoController";
+import * as ativ from "../controllers/atividadeController";
+import * as tur from "../controllers/turmaController";
 import { proteger } from "../middleware/auth";
 
 // Encaminha erros de handlers async para o tratador de erro do Express 4
@@ -37,6 +40,12 @@ router.get("/assinatura/pix", h(ass.pix));
 router.post("/assinatura/cancelar", h(ass.cancelar));
 router.post("/assinatura/reativar", h(ass.reativar));
 
+// Creditos extras de I.A (compra avulsa)
+router.get("/creditos", h(cred.meus));
+router.post("/creditos", h(cred.comprar));
+router.get("/creditos/:id/pix", h(cred.pix));
+router.post("/creditos/:id/atualizar", h(cred.atualizar));
+
 router.get("/config", h(reg.config));
 
 // Diario escolar (X Escolar): conectar conta, turmas e envio da aula
@@ -46,6 +55,38 @@ router.delete("/diario/conectar", h(dia.desconectar));
 router.get("/diario/turmas", h(dia.turmas));
 router.get("/diario/verificar", h(dia.verificar));
 router.post("/diario/enviar", h(dia.enviar));
+router.get("/diario/turmas/:id/alunos", h(dia.alunos));
+
+// Turmas do I.A Prof (lista de alunos) — para quem nao usa o D.E.V
+router.get("/turmas", h(tur.listar));
+router.post("/turmas", h(tur.criar));
+router.put("/turmas/:id", h(tur.atualizar));
+router.delete("/turmas/:id", h(tur.remover));
+
+// Atividades: gerar, salvar, corrigir (manual ou foto) e lancar notas
+router.post("/atividades/gerar", h(ativ.gerar));
+router.get("/atividades/preferencias", h(ativ.preferencias));
+router.delete("/atividades/preferencias", h(ativ.esquecer));
+router.get("/atividades", h(ativ.listar));
+router.post("/atividades", h(ativ.salvar));
+router.get("/atividades/:id", h(ativ.obter));
+router.put("/atividades/:id", h(ativ.atualizar));
+router.delete("/atividades/:id", h(ativ.remover));
+router.get("/atividades/:id/alunos", h(ativ.alunos));
+router.get("/atividades/:id/pontos", h(ativ.pontosDev));
+router.post("/atividades/:id/lancar", h(ativ.lancar));
+router.put("/atividades/:id/correcoes/:alunoId", h(ativ.salvarCorrecao));
+router.delete("/atividades/:id/correcoes/:alunoId", h(ativ.removerCorrecao));
+router.post(
+  "/atividades/:id/correcoes/:alunoId/foto",
+  (req, res, next) =>
+    ativ.uploadFotos(req, res, (err: unknown) => {
+      if (!err) return next();
+      const msg = (err as { code?: string }).code === "LIMIT_FILE_SIZE" ? "Foto muito grande (máx. 8 MB)." : err instanceof Error ? err.message : "Erro no envio da foto";
+      res.status(400).json({ message: msg });
+    }),
+  h(ativ.corrigirFoto)
+);
 
 router.get("/habilidades/componentes", h(hab.getComponentes));
 router.get("/habilidades/ufs", h(hab.getUfs));

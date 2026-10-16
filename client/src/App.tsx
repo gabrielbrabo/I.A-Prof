@@ -11,12 +11,19 @@ import { contaApi, Situacao, Usuario } from "./api/conta";
 import Entrar from "./components/Entrar";
 import Assinatura from "./components/Assinatura";
 import Logo from "./components/Logo";
-import Tour, { PASSOS_INICIO, PASSOS_PLANO } from "./components/Tour";
+import Tour, { PASSOS_ATIV_PRONTA, PASSOS_ATIVIDADE, PASSOS_AULA_PRONTA, PASSOS_INICIO, PASSOS_PLANO } from "./components/Tour";
 import ComoUsar from "./components/ComoUsar";
 import { FERRAMENTAS, ferramentaDa, Tela } from "./components/Menu";
 import InstalarApp from "./components/InstalarApp";
 import { diarioApi, SituacaoDiario } from "./api/diario";
 import { ModalConectarDiario } from "./components/Diario";
+import GerarAtividade from "./components/atividades/GerarAtividade";
+import AtividadesSalvas from "./components/atividades/AtividadesSalvas";
+import CorrigirAtividade from "./components/atividades/CorrigirAtividade";
+import Turmas from "./components/atividades/Turmas";
+import Configuracoes, { BoasVindas, configCompleta } from "./components/Configuracoes";
+import { Atividade } from "./api/atividades";
+import { reais } from "./api/conta";
 
 const QTD_PERIODOS: Record<TipoPeriodo, number> = { bimestre: 4, trimestre: 3, semestre: 2 };
 
@@ -44,7 +51,7 @@ export default function App() {
 }
 
 function Painel() {
-  const [aba, setAba] = useState<"registro" | "plano" | "historico" | "assinatura">("registro");
+  const [aba, setAba] = useState<Tela>("registro");
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [situacao, setSituacao] = useState<Situacao | null>(null);
   const carregarConta = () =>
@@ -70,12 +77,20 @@ function Painel() {
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
   }, [menuAberto]);
-  const [tour, setTour] = useState<null | "inicio" | "plano">(null);
+  const [tour, setTour] = useState<null | "inicio" | "plano" | "atividade" | "aulaPronta" | "ativPronta">(null);
+  // Primeira entrada: assistente "Vamos configurar" (nome, serie, estado, tamanho do texto). O tour vem depois.
+  const [boasVindas, setBoasVindas] = useState(false);
   useEffect(() => {
-    if (!usuario || lerPref("tourVisto", "") === "1") return;
+    if (usuario && lerPref("configurado", "") !== "1" && !configCompleta()) setBoasVindas(true);
+  }, [usuario]);
+  // "Comece por aqui" no Gerar aula (some quando tudo estiver feito ou o professor ocultar)
+  const [primeiraAula, setPrimeiraAula] = useState(() => lerPref("primeiraAula", "") === "1");
+  const [ocultarPassos, setOcultarPassos] = useState(() => lerPref("ocultarPassos", "") === "1");
+  useEffect(() => {
+    if (!usuario || boasVindas || lerPref("tourVisto", "") === "1") return;
     const t = window.setTimeout(() => setTour((v) => v ?? "inicio"), 1200); // espera a tela carregar
     return () => window.clearTimeout(t);
-  }, [usuario]);
+  }, [usuario, boasVindas]);
   // Primeira vez na tela Plano de curso: tour proprio dela
   useEffect(() => {
     if (!usuario || aba !== "plano" || tour || lerPref("tourPlanoVisto", "") === "1") return;
@@ -83,14 +98,54 @@ function Painel() {
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usuario, aba]);
+  // Primeira vez em Gerar atividade: tour de Atividades
+  useEffect(() => {
+    if (!usuario || aba !== "atividade" || tour || lerPref("tourAtivVisto", "") === "1") return;
+    const t = window.setTimeout(() => setTour((v) => v ?? "atividade"), 900);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usuario, aba]);
+  // Guias depois da 1a aula / 1a atividade gerada (uma vez so)
+  useEffect(() => {
+    const PREF = { aulaPronta: "tourAulaProntaVisto", ativPronta: "tourAtivProntaVisto" } as const;
+    const ouvir = (e: Event) => {
+      const qual = (e as CustomEvent<keyof typeof PREF>).detail;
+      if (!PREF[qual] || lerPref(PREF[qual], "") === "1") return;
+      window.setTimeout(() => setTour((v) => v ?? qual), 1000); // espera o resultado aparecer na tela
+    };
+    window.addEventListener("iaprof:tour", ouvir);
+    return () => window.removeEventListener("iaprof:tour", ouvir);
+  }, []);
+
   const fimTour = () => {
-    gravarPref(tour === "plano" ? "tourPlanoVisto" : "tourVisto", "1");
+    gravarPref(
+      tour === "plano" ? "tourPlanoVisto" : tour === "atividade" ? "tourAtivVisto" : tour === "aulaPronta" ? "tourAulaProntaVisto" : tour === "ativPronta" ? "tourAtivProntaVisto" : "tourVisto",
+      "1"
+    );
     setTour(null);
   };
   useEffect(() => {
     diarioApi.status().then(setDiario).catch(() => setDiario(null));
   }, []);
   const [versao, setVersao] = useState(0);
+  // Atividades: atividade aberta para editar / corrigir
+  const [atividadeEditar, setAtividadeEditar] = useState<Atividade | null>(null);
+  const [atividadeCorrigir, setAtividadeCorrigir] = useState<Atividade | null>(null);
+  const [versaoAtiv, setVersaoAtiv] = useState(0);
+  const [ativSalva, setAtivSalva] = useState<string | null>(null); // destaque na lista depois de salvar
+  const [novaAtiv, setNovaAtiv] = useState(0);
+  // Limite de I.A acabou (qualquer tela): card com fundo desfocado oferecendo creditos extras ou mudar de plano
+  const [semLimite, setSemLimite] = useState<string | null>(null);
+  const [focoCreditos, setFocoCreditos] = useState(0);
+  useEffect(() => {
+    const ev = (e: Event) => {
+      setSemLimite((e as CustomEvent<string>).detail || "Seu limite de uso de I.A acabou.");
+      carregarConta();
+    };
+    window.addEventListener("iaprof:semAcesso", ev);
+    return () => window.removeEventListener("iaprof:semAcesso", ev);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [editando, setEditando] = useState<RegistroSalvo | null>(null); // registro aberto pelo historico
   const [novoForm, setNovoForm] = useState(0); // muda para recriar o Registro de aula limpo apos salvar
   const [avisoRegistro, setAvisoRegistro] = useState<string | null>(null);
@@ -133,14 +188,23 @@ function Painel() {
     };
   }, [aba, versaoPlano]);
 
-  const ir = (id: typeof aba) => {
+  // ferramenta aberta (Plano de curso aparece em Plano de aulas e em Atividades)
+  const [ferramentaPref, setFerramentaPref] = useState<string | null>(null);
+  const ir = (id: Tela, ferramenta?: string) => {
+    if (id === "atividades" && aba === "atividades") setAtividadeCorrigir(null); // botao "Atividades e correção" volta para a lista
+    setFerramentaPref((atual) => ferramenta ?? (ferramentaDa(id, atual)?.id === atual ? atual : ferramentaDa(id)?.id ?? atual));
     setAba(id);
     setAvisoRegistro(null);
     window.scrollTo({ top: 0 });
   };
   const alertaAssinatura = situacao?.acesso === "bloqueado" ? situacao.motivo : null;
-  const irMenu = (t: Tela) => {
-    ir(t);
+  const abrirCreditos = () => {
+    setSemLimite(null);
+    ir("assinatura");
+    setFocoCreditos((n) => n + 1);
+  };
+  const irMenu = (t: Tela, ferramenta?: string) => {
+    ir(t, ferramenta);
     setMenuAberto(false);
   };
   const mudarTema = (novo: "claro" | "escuro") => {
@@ -148,11 +212,11 @@ function Painel() {
     gravarPrefGlobal("tema", novo);
   };
   const alertas: Partial<Record<Tela, string | null>> = { plano: faltaPlano, assinatura: alertaAssinatura };
-  const ferramentaAtual = ferramentaDa(aba);
+  const ferramentaAtual = ferramentaDa(aba, ferramentaPref);
   // ultima tela usada em cada ferramenta (o botao principal volta para ela)
   const ultimaTela = useRef<Record<string, Tela>>({});
   if (ferramentaAtual) ultimaTela.current[ferramentaAtual.id] = aba;
-  const abrirFerramenta = (f: (typeof FERRAMENTAS)[number]) => ir(ultimaTela.current[f.id] ?? f.itens[0].id);
+  const abrirFerramenta = (f: (typeof FERRAMENTAS)[number]) => ir(ultimaTela.current[f.id] ?? f.itens[0].id, f.id);
   const selo = (titulo?: string | null, canto = true) =>
     titulo ? (
       <span
@@ -182,7 +246,7 @@ function Painel() {
                 <button key={f.id} data-tour={`ferramenta-${f.id}`} onClick={() => abrirFerramenta(f)} className={botaoTopo(ferramentaAtual?.id === f.id)}>
                   <span>{f.icone}</span>
                   {f.rotulo}
-                  {selo(alerta)}
+                  {alerta && <span title={alerta} className="absolute right-1 top-1 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white" />}
                 </button>
               );
             })}
@@ -192,21 +256,6 @@ function Painel() {
               <span className="lg:hidden">Assinatura</span>
               {selo(alertaAssinatura)}
             </button>
-            <button data-tour="ajuda" onClick={() => setComoUsar(true)} className={botaoTopo(false)} title="Como usar o I.A Prof">
-              <span>❓</span>
-              <span className="hidden lg:inline">Como usar</span>
-            </button>
-            <InstalarApp variante="topo" />
-            <select
-              value={tema}
-              onChange={(e) => mudarTema(e.target.value as "claro" | "escuro")}
-              aria-label="Tema"
-              title="Tema"
-              className="ml-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-600 focus:border-indigo-500 focus:outline-none"
-            >
-              <option value="claro">☀️ Claro</option>
-              <option value="escuro">🌙 Escuro</option>
-            </select>
           </nav>
           <span className="flex min-w-0 items-center gap-1 text-xs text-slate-500 md:gap-2">
             <span className="flex min-w-0 flex-col items-end leading-tight">
@@ -229,14 +278,34 @@ function Painel() {
             <button onClick={sair} className="hidden shrink-0 rounded border-l border-slate-200 px-2 py-1.5 pl-3 hover:bg-slate-100 hover:text-rose-600 md:inline-block">
               Sair
             </button>
-            {/* Celular: tema fora do menu + botao do menu */}
+            {/* Como usar: a direita do Sair (computador) */}
+            <button
+              data-tour="ajuda"
+              onClick={() => setComoUsar(true)}
+              title="Como usar o I.A Prof"
+              className="ml-2 hidden shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 md:inline-flex"
+            >
+              <span>❓</span>
+              <span className="hidden lg:inline">Como usar</span>
+            </button>
+            <button
+              data-tour="config"
+              onClick={() => ir("config")}
+              title="Configurações"
+              aria-label="Configurações"
+              className={`hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg text-base md:inline-flex ${aba === "config" ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-slate-100"}`}
+            >
+              ⚙️
+            </button>
+            {/* Tema: botao pequeno, separado dos outros */}
+            <span className="mx-1 hidden h-6 border-l border-slate-200 md:mx-2 md:block" aria-hidden />
             <button
               onClick={() => mudarTema(tema === "escuro" ? "claro" : "escuro")}
               aria-label={tema === "escuro" ? "Usar tema claro" : "Usar tema escuro"}
-              title={tema === "escuro" ? "Usar tema claro" : "Usar tema escuro"}
-              className="ml-1 shrink-0 rounded-lg px-2 py-1.5 text-lg leading-none hover:bg-slate-100 md:hidden"
+              title={tema === "escuro" ? "Tema escuro (clique para claro)" : "Tema claro (clique para escuro)"}
+              className="mr-3 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm ring-1 ring-slate-200 hover:bg-slate-100 md:mr-0"
             >
-              {tema === "escuro" ? "☀️" : "🌙"}
+              {tema === "escuro" ? "🌙" : "☀️"}
             </button>
             <button
               onClick={() => setMenuAberto(true)}
@@ -260,13 +329,20 @@ function Painel() {
                   data-aba={i.id}
                   data-tour={i.tour}
                   title={alertas[i.id] ?? undefined}
-                  onClick={() => ir(i.id)}
+                  onClick={() => ir(i.id, ferramentaAtual.id)}
                   className={`relative flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 py-1.5 text-[13px] font-medium sm:flex-none sm:px-3 sm:text-sm ${
                     aba === i.id ? "bg-white text-indigo-700 shadow-sm ring-1 ring-indigo-200" : "text-slate-600 hover:bg-white"
                   }`}
                 >
                   <span className="hidden sm:inline">{i.icone}</span>
-                  {i.rotulo}
+                  {i.curto ? (
+                    <>
+                      <span className="sm:hidden">{i.curto}</span>
+                      <span className="hidden sm:inline">{i.rotulo}</span>
+                    </>
+                  ) : (
+                    i.rotulo
+                  )}
                   {selo(alertas[i.id])}
                 </button>
               ))}
@@ -305,9 +381,9 @@ function Painel() {
                     {f.itens.map((i) => (
                       <button
                         key={i.id}
-                        onClick={() => irMenu(i.id)}
+                        onClick={() => irMenu(i.id, f.id)}
                         className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium ${
-                          aba === i.id ? "bg-indigo-600 text-white" : "text-slate-700 hover:bg-slate-100"
+                          aba === i.id && ferramentaAtual?.id === f.id ? "bg-indigo-600 text-white" : "text-slate-700 hover:bg-slate-100"
                         }`}
                       >
                         <span>{i.icone}</span>
@@ -328,6 +404,15 @@ function Painel() {
                 <span className="text-base">💳</span>
                 <span className="flex-1">Minha assinatura</span>
                 {selo(alertaAssinatura, false)}
+              </button>
+              <button
+                onClick={() => irMenu("config")}
+                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium ${
+                  aba === "config" ? "bg-indigo-600 text-white" : "text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                <span className="text-base">⚙️</span>
+                <span className="flex-1">Configurações</span>
               </button>
               <button
                 onClick={() => {
@@ -353,30 +438,38 @@ function Painel() {
 
       <main className="mx-auto max-w-5xl px-3 pb-10 pt-4 sm:px-4 md:py-6">
         {/* Uso no topo do Gerar aula: no teste grátis mostra aulas e dias; assinante vê o uso de I.A do mês */}
-        {situacao && aba === "registro" && (() => {
+        {situacao && (aba === "registro" || aba === "atividade" || aba === "atividades") && (() => {
           const teste = situacao.acesso === "teste";
           const t = situacao.teste;
-          const pctAulas = t.aulasLimite ? Math.round((t.aulasUsadas / t.aulasLimite) * 100) : 0;
-          // no teste vale o que acabar primeiro: as aulas ou o limite de I.A
-          const pct = Math.min(100, teste ? Math.max(pctAulas, situacao.uso.percentual) : situacao.uso.percentual);
+          // no teste: em Atividades conta as atividades; nas aulas, as aulas
+          const emAtiv = aba !== "registro";
+          const usados = emAtiv ? t.atividadesUsadas ?? 0 : t.aulasUsadas;
+          const limiteQtd = emAtiv ? t.atividadesLimite ?? 0 : t.aulasLimite;
+          const nomeQtd = emAtiv ? "atividades" : "aulas";
+          const pctQtd = limiteQtd ? Math.round((usados / limiteQtd) * 100) : 0;
+          // no teste vale o que acabar primeiro: a quantidade ou o limite de I.A
+          const pct = Math.min(100, teste ? Math.max(pctQtd, situacao.uso.percentual) : situacao.uso.percentual);
           const cor = pct >= 90 ? "rose" : pct >= 70 ? "amber" : "emerald";
           const corTexto = { rose: "text-rose-600", amber: "text-amber-700", emerald: "text-emerald-700" }[cor];
           const corBarra = { rose: "bg-rose-500", amber: "bg-amber-500", emerald: "bg-emerald-500" }[cor];
+          const saldo = situacao.creditos?.saldoCentavos ?? 0;
+          const podeComprar = !!situacao.creditos?.podeComprar;
           return (
             <div className="mb-3 rounded-lg border border-slate-200 bg-white px-3 py-2" data-tour="uso">
               <div className="mb-1 flex items-center justify-between gap-2 text-xs">
                 <span className="font-medium text-slate-600">{teste ? "🎁 Teste grátis" : "⚡ Uso de I.A neste mês"}</span>
                 <span className={`font-semibold ${corTexto}`}>
-                  {teste ? `${t.aulasUsadas} de ${t.aulasLimite} aulas` : `${situacao.uso.percentual}% usado`}
+                  {teste ? `${usados} de ${limiteQtd} ${nomeQtd}` : `${situacao.uso.percentual}% usado`}
                 </span>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={teste ? "Aulas usadas no teste grátis" : "Uso de I.A neste mês"}>
+              <div className="h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={teste ? `${nomeQtd} usadas no teste grátis` : "Uso de I.A neste mês"}>
                 <div className={`h-full rounded-full transition-all ${corBarra}`} style={{ width: `${Math.max(pct, pct > 0 ? 2 : 0)}%` }} />
               </div>
               <p className="mt-1 text-[11px] text-slate-400">
                 {teste
-                  ? `${t.diasRestantes} dia(s) restante(s) · ${Math.max(0, t.aulasLimite - t.aulasUsadas)} aula(s) restante(s). Vale o que acabar primeiro.`
+                  ? `${t.diasRestantes} dia(s) restante(s) · ${Math.max(0, limiteQtd - usados)} ${emAtiv ? "atividade(s)" : "aula(s)"} restante(s).${emAtiv ? " No teste, a correção com foto é dos planos pagos; à mão é liberada." : " Vale o que acabar primeiro."}`
                   : "Renova todo dia 1º."}
+                {saldo > 0 && !teste && <> · ⚡ Créditos extras: {reais(saldo)}</>}
                 {(teste || pct >= 90) && (
                   <>
                     {" "}
@@ -385,12 +478,20 @@ function Painel() {
                     </button>
                   </>
                 )}
+                {!teste && podeComprar && pct >= 80 && (
+                  <>
+                    {" · "}
+                    <button onClick={abrirCreditos} className="font-semibold text-emerald-700 hover:underline">
+                      + Comprar créditos
+                    </button>
+                  </>
+                )}
               </p>
             </div>
           );
         })()}
         {/* Teste gratis / limite do plano */}
-        {situacao && aba !== "assinatura" && (situacao.acesso === "bloqueado" || ((situacao.acesso === "teste" || situacao.uso.percentual >= 80) && aba !== "registro")) && (
+        {situacao && aba !== "assinatura" && (situacao.acesso === "bloqueado" || ((situacao.acesso === "teste" || situacao.uso.percentual >= 80) && aba !== "registro" && aba !== "atividade" && aba !== "atividades")) && (
           <div
             className={`mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg px-4 py-2.5 text-sm ${
               situacao.acesso === "bloqueado" ? "bg-rose-50 text-rose-700" : "bg-indigo-50 text-indigo-800"
@@ -400,7 +501,7 @@ function Painel() {
               {situacao.acesso === "bloqueado"
                 ? situacao.motivo
                 : situacao.acesso === "teste"
-                  ? `Teste grátis: ${situacao.teste.diasRestantes} dia(s) e ${Math.max(0, situacao.teste.aulasLimite - situacao.teste.aulasUsadas)} aula(s) restantes.`
+                  ? `Teste grátis: ${situacao.teste.diasRestantes} dia(s), ${Math.max(0, situacao.teste.aulasLimite - situacao.teste.aulasUsadas)} aula(s) e ${Math.max(0, (situacao.teste.atividadesLimite ?? 0) - (situacao.teste.atividadesUsadas ?? 0))} atividade(s) restantes.`
                   : `Você já usou ${situacao.uso.percentual}% do limite de I.A do seu plano neste mês.`}
             </span>
             <button onClick={() => ir("assinatura")} className="rounded-lg bg-indigo-600 px-3 py-1 text-xs font-semibold text-white hover:bg-indigo-700">
@@ -408,6 +509,54 @@ function Painel() {
             </button>
           </div>
         )}
+        {aba === "registro" && !editando && !ocultarPassos && (() => {
+          const passos = [
+            { feito: configCompleta(), titulo: "Configure seus dados", acao: "Configurar", ir: () => ir("config") },
+            { feito: configCompleta() && (faltaPlano == null || !faltaPlano.startsWith("Nenhum")), titulo: "Envie o plano de curso", acao: "Enviar plano", ir: () => ir("plano", "aulas") },
+            { feito: primeiraAula, titulo: "Gere e salve sua primeira aula", acao: "", ir: () => document.getElementById("texto-aula")?.focus() },
+            { feito: !!diario?.conectado, titulo: "Conecte ao D.E.V (opcional)", acao: "Conectar", ir: () => setModalDiario(true), opcional: true },
+          ];
+          const obrigatorios = passos.filter((p) => !p.opcional);
+          if (obrigatorios.every((p) => p.feito)) return null;
+          const feitos = obrigatorios.filter((p) => p.feito).length;
+          return (
+            <div className="mb-4 rounded-2xl border border-indigo-100 bg-white p-3 sm:p-4" data-tour="primeiros-passos">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-800">
+                  🚀 Comece por aqui <span className="font-normal text-slate-500">· {feitos} de {obrigatorios.length}</span>
+                </p>
+                <button
+                  onClick={() => {
+                    gravarPref("ocultarPassos", "1");
+                    setOcultarPassos(true);
+                  }}
+                  className="text-xs text-slate-400 hover:text-slate-600"
+                >
+                  Ocultar
+                </button>
+              </div>
+              <ol className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {passos
+                  .filter((p) => !(p.opcional && diario?.disponivel === false))
+                  .map((p, i) => (
+                    <li key={p.titulo} className={`items-center gap-2 rounded-xl px-3 py-2 text-sm ${p.feito ? "hidden bg-emerald-50 text-emerald-800 sm:flex" : "flex bg-slate-50 text-slate-700"}`}>
+                      <span
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${p.feito ? "bg-emerald-600 text-white" : "bg-white text-slate-500 ring-1 ring-slate-300"}`}
+                      >
+                        {p.feito ? "✓" : i + 1}
+                      </span>
+                      <span className={`min-w-0 flex-1 ${p.feito ? "line-through decoration-emerald-400/60" : ""}`}>{p.titulo}</span>
+                      {!p.feito && p.acao && (
+                        <button onClick={p.ir} className="shrink-0 rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-indigo-700">
+                          {p.acao}
+                        </button>
+                      )}
+                    </li>
+                  ))}
+              </ol>
+            </div>
+          );
+        })()}
         {aba === "registro" && (
           <RegistroAula
             key={editando?._id ?? `novo-${novoForm}`}
@@ -419,7 +568,14 @@ function Painel() {
               if (lerPref("anoLetivo", "") !== String(anoLetivo)) gravarPref("anoLetivo", String(anoLetivo));
               setVersaoPlano((v) => v + 1);
             }}
-            onSalvo={() => setVersao((v) => v + 1)}
+            onSalvo={() => {
+              setVersao((v) => v + 1);
+              if (!primeiraAula) {
+                gravarPref("primeiraAula", "1");
+                setPrimeiraAula(true);
+              }
+            }}
+            onAbrirConfig={() => ir("config")}
             onUsouIA={carregarConta}
             professorNome={usuario?.nome}
             diario={diario}
@@ -427,7 +583,7 @@ function Painel() {
             onAbrirDiario={() => setModalDiario(true)}
             onSemAcesso={() => {
               carregarConta();
-              setAba("assinatura");
+              setSemLimite(situacao?.motivo ?? "Seu limite de uso de I.A acabou.");
             }}
             onFecharEdicao={(aviso) => {
               setEditando(null);
@@ -446,10 +602,98 @@ function Painel() {
             <PlanoCurso onMudou={() => setVersaoPlano((v) => v + 1)} />
           </>
         )}
-        {aba === "assinatura" && <Assinatura situacao={situacao} onSituacao={setSituacao} />}
+        {aba === "assinatura" && <Assinatura situacao={situacao} onSituacao={setSituacao} focoCreditos={focoCreditos > 0} key={`ass-${focoCreditos}`} />}
+        {aba === "atividade" && (
+          <GerarAtividade
+            key={atividadeEditar?._id ?? `nova-${novaAtiv}`}
+            editar={atividadeEditar}
+            diario={diario}
+            professorNome={usuario?.nome}
+            onSalva={() => setVersaoAtiv((v) => v + 1)}
+            onCorrigir={(a) => {
+              setAtividadeEditar(null);
+              setAtividadeCorrigir(a);
+              ir("atividades");
+            }}
+            onUsouIA={carregarConta}
+            onIrTurmas={() => ir("turmas")}
+            onIrPlano={() => ir("plano", "atividades")}
+            onFecharEdicao={() => {
+              setAtividadeEditar(null);
+              setNovaAtiv((n) => n + 1);
+            }}
+            onIrLista={(a) => {
+              setAtividadeEditar(null);
+              setAtividadeCorrigir(null);
+              setNovaAtiv((n) => n + 1);
+              setAtivSalva(a._id ?? null);
+              ir("atividades");
+            }}
+          />
+        )}
+        {aba === "atividades" &&
+          (atividadeCorrigir ? (
+            <CorrigirAtividade
+              key={atividadeCorrigir._id}
+              atividade={atividadeCorrigir}
+              diario={diario}
+              fotoLiberada={!!situacao?.planoId}
+              onAssinar={() => ir("assinatura")}
+              onVoltar={() => {
+                setAtividadeCorrigir(null);
+                setVersaoAtiv((v) => v + 1);
+              }}
+              onEditar={(a) => {
+                setAtividadeEditar(a);
+                setAtividadeCorrigir(null);
+                ir("atividade");
+              }}
+              onUsouIA={carregarConta}
+              onAbrirDiario={() => setModalDiario(true)}
+            />
+          ) : (
+            <AtividadesSalvas
+              atualizar={versaoAtiv}
+              destaque={ativSalva}
+              onDestaqueVisto={() => setAtivSalva(null)}
+              teste={!situacao?.planoId}
+              onAssinar={() => ir("assinatura")}
+              professorNome={diario?.conectado && diario.nome ? diario.nome : usuario?.nome}
+              onCorrigir={setAtividadeCorrigir}
+              onEditar={(a) => {
+                setAtividadeEditar(a);
+                ir("atividade");
+              }}
+              onNova={() => {
+                setAtividadeEditar(null);
+                setNovaAtiv((n) => n + 1);
+                ir("atividade");
+              }}
+            />
+          ))}
+        {aba === "turmas" && <Turmas diario={diario} onAbrirDiario={() => setModalDiario(true)} />}
+        {aba === "config" && (
+          <Configuracoes
+            professorNome={usuario?.nome}
+            diario={diario}
+            tema={tema}
+            onTema={mudarTema}
+            onAbrirDiario={() => setModalDiario(true)}
+            onIrPlano={() => ir("plano", "aulas")}
+            onRever={() => {
+              ir("registro", "aulas");
+              window.setTimeout(() => setTour("inicio"), 600);
+            }}
+            onSalvo={() => {
+              setNovoForm((n) => n + 1);
+              setVersaoPlano((v) => v + 1);
+            }}
+          />
+        )}
         {aba === "historico" && (
           <Historico
             atualizar={versao}
+            onNova={() => ir("registro", "aulas")}
             onAbrir={(r) => {
               setAvisoRegistro(null);
               setEditando(r);
@@ -458,18 +702,114 @@ function Painel() {
           />
         )}
       </main>
+      {boasVindas && (
+        <BoasVindas
+          professorNome={usuario?.nome}
+          diario={diario}
+          onAbrirDiario={() => setModalDiario(true)}
+          onIrPlano={() => ir("plano", "aulas")}
+          onFim={() => {
+            setBoasVindas(false);
+            setNovoForm((n) => n + 1);
+            setVersaoPlano((v) => v + 1);
+          }}
+        />
+      )}
+      {semLimite && (
+        <ModalSemLimite
+          motivo={semLimite}
+          situacao={situacao}
+          onComprar={abrirCreditos}
+          onPlanos={() => {
+            setSemLimite(null);
+            ir("assinatura");
+          }}
+          onFechar={() => setSemLimite(null)}
+        />
+      )}
       {modalDiario && diario && <ModalConectarDiario situacao={diario} onFechar={() => setModalDiario(false)} onMudou={setDiario} />}
       {comoUsar && (
         <ComoUsar
           onFechar={() => setComoUsar(false)}
           onRever={(qual) => {
             setComoUsar(false);
-            ir(qual === "plano" ? "plano" : "registro");
+            ir(qual === "plano" ? "plano" : qual === "atividade" ? "atividade" : "registro", qual === "atividade" ? "atividades" : qual === "plano" ? "aulas" : undefined);
             window.setTimeout(() => setTour(qual), 600);
           }}
         />
       )}
-      {tour && <Tour key={tour} passos={tour === "plano" ? PASSOS_PLANO : PASSOS_INICIO} onFim={fimTour} />}
+      {tour && (
+        <Tour
+          key={tour}
+          passos={
+            tour === "plano"
+              ? PASSOS_PLANO
+              : tour === "atividade"
+                ? PASSOS_ATIVIDADE
+                : tour === "aulaPronta"
+                  ? PASSOS_AULA_PRONTA
+                  : tour === "ativPronta"
+                    ? PASSOS_ATIV_PRONTA
+                    : PASSOS_INICIO
+          }
+          onFim={fimTour}
+        />
+      )}
+    </div>
+  );
+}
+
+// Card com fundo desfocado quando a I.A e barrada: comprar creditos extras ou mudar de plano
+function ModalSemLimite({
+  motivo,
+  situacao,
+  onComprar,
+  onPlanos,
+  onFechar,
+}: {
+  motivo: string;
+  situacao: Situacao | null;
+  onComprar: () => void;
+  onPlanos: () => void;
+  onFechar: () => void;
+}) {
+  const assinante = !!situacao?.planoId;
+  const premium = situacao?.planoId === "premium";
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm" onClick={onFechar} role="dialog" aria-modal="true" aria-labelledby="titulo-sem-limite">
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-2xl">⚡</div>
+        <p id="titulo-sem-limite" className="text-lg font-bold text-slate-800">
+          {assinante ? "Seu limite de uso de I.A acabou" : "Acesso à I.A bloqueado"}
+        </p>
+        <p className="mt-1 text-sm text-slate-600">{motivo}</p>
+        {assinante && (
+          <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            Uma correção de turma que você já começou pode ser terminada. A correção à mão, salvar e lançar notas continuam liberados.
+          </p>
+        )}
+        <div className="mt-4 grid gap-2">
+          {assinante ? (
+            <>
+              <button onClick={onComprar} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">
+                ⚡ Comprar créditos de uso
+              </button>
+              {!premium && (
+                <button onClick={onPlanos} className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
+                  ⬆️ Fazer upgrade do plano
+                </button>
+              )}
+            </>
+          ) : (
+            <button onClick={onPlanos} className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
+              Assinar um plano
+            </button>
+          )}
+          <button onClick={onFechar} className="rounded-lg px-4 py-2 text-sm text-slate-500 hover:bg-slate-100">
+            Agora não
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

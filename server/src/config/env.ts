@@ -11,6 +11,19 @@ export const env = {
   anthropicModel: process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5",
   // Modelo da etapa de ESCOLHA das habilidades (opcional; ex.: claude-opus-5-5 para mais precisao)
   anthropicModelEscolha: process.env.ANTHROPIC_MODEL_ESCOLHA || "",
+  // Modelo das ATIVIDADES (gerar e ajustar). Vazio = ANTHROPIC_MODEL. Ex.: claude-opus-5-5 (mais caprichado, ~2,5x o custo)
+  // Gerar/ajustar atividades: so OpenAI (GPT)
+  openaiModeloAtividade: process.env.OPENAI_MODEL_ATIVIDADE || "gpt-6.1-sol",
+  openaiRaciocinio: process.env.OPENAI_RACIOCINIO ?? "medium", // low | medium | high ("" = sem)
+  // Correcao de atividades (ferramenta futura): objetivas/curtas no modelo barato, discursivas no Sonnet
+  anthropicModelCorrecaoObjetiva: process.env.ANTHROPIC_MODEL_CORRECAO_OBJETIVA || "claude-haiku-4-5",
+  anthropicModelCorrecaoDiscursiva: process.env.ANTHROPIC_MODEL_CORRECAO_DISCURSIVA || "",
+  // Imagens das atividades (ilustracoes geradas). Vazio = sem gerar imagens (a atividade usa emojis/desenhos simples).
+  openaiKey: process.env.OPENAI_API_KEY || "",
+  imagemModelo: process.env.IMAGEM_MODELO || "gpt-image-2.5-flare",
+  imagemQualidade: (process.env.IMAGEM_QUALIDADE || "medium") as "low" | "medium" | "high",
+  imagemMax: Number(process.env.IMAGEM_MAX || 8), // por atividade
+  imagemCustoUsd: Number(process.env.IMAGEM_CUSTO_USD || 0), // 0 = usa a tabela de precos
   // Transcricao de voz (Groq Whisper) para navegadores sem ditado proprio (Firefox, Brave, Opera...)
   groqKey: process.env.GROQ_API_KEY || "",
   groqModeloVoz: process.env.GROQ_MODELO_VOZ || "whisper-large-v3-turbo",
@@ -21,6 +34,13 @@ export const env = {
   googleClientId: process.env.GOOGLE_CLIENT_ID || "",
   // Custo da I.A em reais (para o limite de uso de cada plano)
   cotacaoDolar: Number(process.env.COTACAO_DOLAR || 5.3),
+  // Creditos extras de I.A (compra avulsa): cada R$ 1 pago vira R$ FATOR de custo real de I.A.
+  // 0.5 = metade do valor pago cobre a I.A; o resto cobre taxa, imposto e margem.
+  creditos: {
+    fator: Number(process.env.CREDITO_FATOR || 0.5),
+    minimoCentavos: Number(process.env.CREDITO_MINIMO_CENTAVOS || 1000), // R$ 10
+    maximoCentavos: Number(process.env.CREDITO_MAXIMO_CENTAVOS || 50000), // R$ 500
+  },
   // Integracao com o Diario escolar (X Escolar): endereco da API do Diario e chave compartilhada
   diario: {
     url: (process.env.DIARIO_API_URL || "").replace(/\/+$/, ""),

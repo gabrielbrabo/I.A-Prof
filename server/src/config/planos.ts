@@ -15,24 +15,24 @@ export const PLANOS: Plano[] = [
   {
     id: "essencial",
     nome: "Essencial",
-    precoMensal: 2999,
-    limiteIaCentavos: 600, // ~R$ 6 de I.A por mes
+    precoMensal: 3999,
+    limiteIaCentavos: 1600, // ~R$ 16 de I.A por mes
     recursos: ["Gerar aulas com habilidades do plano de curso", "Leitura do plano de curso sem custo", "Ditado por voz"],
   },
   {
     id: "profissional",
     nome: "Profissional",
-    precoMensal: 5999,
-    limiteIaCentavos: 1500, // ~R$ 15
+    precoMensal: 6999,
+    limiteIaCentavos: 3000, // ~R$ 30
     destaque: true,
-    recursos: ["Tudo do Essencial", "Limite de uso 2,5x maior", "Aulas no seu formato (I.A aprende com suas aulas)"],
+    recursos: ["Tudo do Essencial", "Limite de uso quase 2x maior", "Aulas no seu formato (I.A aprende com suas aulas)"],
   },
   {
     id: "premium",
     nome: "Premium",
-    precoMensal: 9999,
-    limiteIaCentavos: 3200, // ~R$ 32
-    recursos: ["Tudo do Profissional", "Limite de uso 5x maior que o Essencial", "Prioridade nas novas ferramentas"],
+    precoMensal: 10999,
+    limiteIaCentavos: 5500, // ~R$ 55
+    recursos: ["Tudo do Profissional", "Limite de uso 3,5x maior que o Essencial", "Prioridade nas novas ferramentas"],
   },
 ];
 
@@ -40,5 +40,7 @@ export type Ciclo = "mensal" | "anual";
 export const precoDoCiclo = (p: Plano, ciclo: Ciclo) => (ciclo === "anual" ? p.precoMensal * 10 : p.precoMensal); // anual = 2 meses gratis
 export const planoPorId = (id: string) => PLANOS.find((p) => p.id === id) ?? null;
 
-// Teste gratis: 30 dias OU 30 aulas geradas (o que acabar primeiro)
-export const TESTE = { dias: 30, aulas: 30, limiteIaCentavos: 450 }; // ~R$ 0,12 por aula: 30 aulas cabem com folga
+// Teste gratis: 30 dias, com 30 aulas e 10 atividades geradas (cada uma conta separado).
+// No teste: gerar, corrigir a mao e lancar notas; a correcao com foto (I.A) e dos planos pagos.
+// Orcamento: 30 aulas (~R$ 0,12 = R$ 3,60) + 10 atividades/ajustes (~R$ 0,64 = R$ 6,40) = ~R$ 10; R$ 12 da folga.
+export const TESTE = { dias: 30, aulas: 30, atividades: 10, limiteIaCentavos: 1200 };

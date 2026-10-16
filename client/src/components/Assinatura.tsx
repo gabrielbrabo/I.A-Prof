@@ -1,24 +1,27 @@
 import { useEffect, useState } from "react";
 import { assinaturaApi, DadosPix, PlanoVenda, reais, Situacao } from "../api/conta";
-
-const campo = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none";
-const dataBR = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR") : "—");
+import Creditos from "./Creditos";
+import { CaixaPix, CamposPagamento, corpoPagamento, dataBR, formVazio } from "./Pagamento";
 
 // Aba "Minha assinatura": situacao (teste/plano/uso), planos e pagamento (PIX ou cartao)
-export default function Assinatura({ situacao, onSituacao }: { situacao: Situacao | null; onSituacao: (s: Situacao) => void }) {
+export default function Assinatura({
+  situacao,
+  onSituacao,
+  focoCreditos = false,
+}: {
+  situacao: Situacao | null;
+  onSituacao: (s: Situacao) => void;
+  focoCreditos?: boolean;
+}) {
   const [planos, setPlanos] = useState<PlanoVenda[]>([]);
   const [pagamentosLigados, setPagamentosLigados] = useState(false);
   const [escolhido, setEscolhido] = useState<PlanoVenda["id"] | null>(null);
   const [ciclo, setCiclo] = useState<"mensal" | "anual">("mensal");
-  const [metodo, setMetodo] = useState<"PIX" | "CREDIT_CARD">("PIX");
-  const [cpf, setCpf] = useState("");
-  const [tel, setTel] = useState("");
-  const [cartao, setCartao] = useState({ nome: "", numero: "", validade: "", cvv: "", cep: "", numeroEnd: "" });
+  const [form, setForm] = useState(formVazio);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [confirmarCancel, setConfirmarCancel] = useState(false);
   const [pix, setPix] = useState<DadosPix | null>(null);
-  const [copiado, setCopiado] = useState(false);
   const [pixErro, setPixErro] = useState<string | null>(null);
 
   useEffect(() => {
@@ -62,16 +65,6 @@ export default function Assinatura({ situacao, onSituacao }: { situacao: Situaca
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aguardando, pix]);
 
-  async function copiarPix() {
-    if (!pix) return;
-    try {
-      await navigator.clipboard.writeText(pix.copiaECola);
-    } catch {
-      /* navegador sem permissao: o professor copia do campo */
-    }
-    setCopiado(true);
-    setTimeout(() => setCopiado(false), 2500);
-  }
   useEffect(() => {
     if (!aguardando) return;
     const t = setInterval(() => assinaturaApi.atualizar().then(onSituacao).catch(() => {}), 6000);
@@ -83,26 +76,7 @@ export default function Assinatura({ situacao, onSituacao }: { situacao: Situaca
     setErro(null);
     setEnviando(true);
     try {
-      const [mm, aa] = cartao.validade.split("/").map((x) => x.trim());
-      const r = await assinaturaApi.assinar({
-        planoId: escolhido,
-        ciclo,
-        metodo,
-        cpfCnpj: cpf,
-        telefone: tel,
-        ...(metodo === "CREDIT_CARD"
-          ? {
-              cartao: {
-                holderName: cartao.nome,
-                number: cartao.numero.replace(/\s/g, ""),
-                expiryMonth: mm ?? "",
-                expiryYear: aa && aa.length === 2 ? `20${aa}` : aa ?? "",
-                ccv: cartao.cvv,
-              },
-              titular: { postalCode: cartao.cep, addressNumber: cartao.numeroEnd, phone: tel },
-            }
-          : {}),
-      });
+      const r = await assinaturaApi.assinar({ planoId: escolhido, ciclo, ...corpoPagamento(form) });
       onSituacao(r.situacao);
       setEscolhido(null);
       // PIX: QR Code e copia-e-cola aparecem aqui mesmo (nunca abre outra tela)
@@ -147,7 +121,7 @@ export default function Assinatura({ situacao, onSituacao }: { situacao: Situaca
               )}
               {!assinante && s.teste.ativo && (
                 <p className="text-xs text-slate-500">
-                  {s.teste.diasRestantes} dia(s) restante(s) · {s.teste.aulasUsadas} de {s.teste.aulasLimite} aulas usadas
+                  {s.teste.diasRestantes} dia(s) restante(s) · {s.teste.aulasUsadas} de {s.teste.aulasLimite} aulas · {s.teste.atividadesUsadas ?? 0} de {s.teste.atividadesLimite ?? 0} atividades usadas
                 </p>
               )}
             </div>
@@ -164,47 +138,7 @@ export default function Assinatura({ situacao, onSituacao }: { situacao: Situaca
             <div className="mt-3 rounded-xl border-2 border-emerald-300 bg-emerald-50 p-3 sm:p-4">
               <p className="text-sm font-semibold text-emerald-900">Pague com PIX para liberar seu plano</p>
               <p className="text-xs text-emerald-800">Assim que o pagamento cair, o acesso é liberado sozinho nesta tela.</p>
-              {pix ? (
-                <div className="mt-3 flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-                  <img src={`data:image/png;base64,${pix.imagem}`} alt="QR Code PIX" className="order-2 h-40 w-40 rounded-lg bg-white p-2 ring-1 ring-emerald-200 sm:order-none sm:h-48 sm:w-48" />
-                  <div className="order-1 w-full min-w-0 flex-1 space-y-2 sm:order-none">
-                    {pix.valorCentavos != null && (
-                      <p className="text-sm text-slate-700">
-                        Valor: <b>{reais(pix.valorCentavos)}</b>
-                      </p>
-                    )}
-                    <ol className="list-decimal space-y-0.5 pl-4 text-xs text-slate-600">
-                      <li>Abra o app do seu banco e escolha pagar com PIX.</li>
-                      <li>Aponte a câmera para o QR Code ou use o código copia e cola.</li>
-                      <li>Confirme o pagamento — pronto, o plano libera aqui.</li>
-                    </ol>
-                    <label className="block text-xs font-medium text-slate-500">
-                      PIX copia e cola
-                      <textarea
-                        readOnly
-                        rows={3}
-                        value={pix.copiaECola}
-                        onFocus={(e) => e.target.select()}
-                        className="mt-1 w-full resize-none rounded-lg border border-slate-300 bg-white px-2 py-1.5 font-mono text-[11px] text-slate-700"
-                      />
-                    </label>
-                    <button onClick={copiarPix} className="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm sm:w-auto sm:py-2 font-semibold text-white hover:bg-emerald-700">
-                      {copiado ? "✓ Código copiado!" : "Copiar código PIX"}
-                    </button>
-                    {pix.expira && <p className="text-[11px] text-slate-500">Válido até {dataBR(pix.expira)}.</p>}
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-2 text-xs text-slate-600">
-                  {pixErro ? (
-                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-900">
-                      {pixErro} Tentando de novo automaticamente…
-                    </p>
-                  ) : (
-                    <p>Gerando o QR Code do PIX…</p>
-                  )}
-                </div>
-              )}
+              <CaixaPix pix={pix} erro={pixErro} passoFinal="Confirme o pagamento — pronto, o plano libera aqui." />
               <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-emerald-200 pt-2 text-xs">
                 <span className="flex items-center gap-1.5 text-emerald-800">
                   <span className="inline-block h-2 w-2 rounded-full bg-emerald-500 motion-safe:animate-pulse" />
@@ -309,68 +243,22 @@ export default function Assinatura({ situacao, onSituacao }: { situacao: Situaca
           <p className="mb-3 text-sm font-semibold text-slate-700">
             Pagamento — plano {planos.find((p) => p.id === escolhido)?.nome} ({ciclo})
           </p>
-          <div className="mb-3 flex gap-2">
-            {(["PIX", "CREDIT_CARD"] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => setMetodo(m)}
-                className={`flex-1 rounded-lg border px-4 py-2 text-sm sm:flex-none ${metodo === m ? "border-indigo-500 bg-indigo-50 font-semibold text-indigo-700" : "border-slate-300 text-slate-600"}`}
-              >
-                {m === "PIX" ? "PIX" : "Cartão de crédito"}
-              </button>
-            ))}
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="text-xs font-medium text-slate-500">
-              CPF ou CNPJ
-              <input className={campo} inputMode="numeric" autoComplete="off" value={cpf} onChange={(e) => setCpf(e.target.value)} />
-            </label>
-            <label className="text-xs font-medium text-slate-500">
-              Celular
-              <input className={campo} type="tel" inputMode="tel" value={tel} onChange={(e) => setTel(e.target.value)} placeholder="(00) 00000-0000" />
-            </label>
-            {metodo === "CREDIT_CARD" && (
-              <>
-                <label className="text-xs font-medium text-slate-500 sm:col-span-2">
-                  Nome impresso no cartão
-                  <input className={campo} value={cartao.nome} onChange={(e) => setCartao({ ...cartao, nome: e.target.value })} />
-                </label>
-                <label className="text-xs font-medium text-slate-500 sm:col-span-2">
-                  Número do cartão
-                  <input className={campo} inputMode="numeric" value={cartao.numero} onChange={(e) => setCartao({ ...cartao, numero: e.target.value })} />
-                </label>
-                <label className="text-xs font-medium text-slate-500">
-                  Validade (MM/AA)
-                  <input className={campo} value={cartao.validade} onChange={(e) => setCartao({ ...cartao, validade: e.target.value })} placeholder="08/29" />
-                </label>
-                <label className="text-xs font-medium text-slate-500">
-                  CVV
-                  <input className={campo} inputMode="numeric" value={cartao.cvv} onChange={(e) => setCartao({ ...cartao, cvv: e.target.value })} />
-                </label>
-                <label className="text-xs font-medium text-slate-500">
-                  CEP
-                  <input className={campo} value={cartao.cep} onChange={(e) => setCartao({ ...cartao, cep: e.target.value })} />
-                </label>
-                <label className="text-xs font-medium text-slate-500">
-                  Nº do endereço
-                  <input className={campo} value={cartao.numeroEnd} onChange={(e) => setCartao({ ...cartao, numeroEnd: e.target.value })} />
-                </label>
-                <p className="text-[11px] text-slate-400 sm:col-span-2">CEP, número e celular são exigência antifraude da operadora do cartão.</p>
-              </>
-            )}
-          </div>
+          <CamposPagamento valor={form} onChange={setForm} />
           {erro && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{erro}</p>}
           <div className="mt-4 flex justify-end gap-2">
             <button onClick={() => setEscolhido(null)} className="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">
               Voltar
             </button>
             <button onClick={assinar} disabled={enviando} className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
-              {enviando ? "Processando..." : metodo === "PIX" ? "Gerar PIX" : "Pagar com cartão"}
+              {enviando ? "Processando..." : form.metodo === "PIX" ? "Gerar PIX" : "Pagar com cartão"}
             </button>
           </div>
         </div>
       )}
       {erro && !escolhido && <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{erro}</p>}
+
+      {/* Creditos extras (abaixo dos planos): compra liberada a qualquer momento */}
+      <Creditos onSituacao={onSituacao} foco={focoCreditos} assinante={assinante} />
     </div>
   );
 }

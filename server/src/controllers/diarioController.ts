@@ -7,13 +7,13 @@ import { diarioLigado } from "../config/env";
 
 // Integracao com o Diario escolar: conectar a conta, listar turmas e enviar a aula salva.
 
-async function tokenDo(usuarioId: string) {
+export async function tokenDo(usuarioId: string) {
   const u = await Usuario.findById(usuarioId).select("diario").lean();
   return u?.diario?.token ?? null;
 }
 
 // Token do Diario recusado: desconecta para o professor conectar de novo
-async function tratarErro(res: Response, usuarioId: string, e: unknown) {
+export async function tratarErro(res: Response, usuarioId: string, e: unknown) {
   if (e instanceof ErroDiario) {
     if (e.dados.vinculoInvalido) {
       await Usuario.updateOne({ _id: usuarioId }, { $set: { diario: { token: null, nome: null, escolas: [], conectadoEm: null } } });
@@ -108,6 +108,18 @@ export async function enviar(req: Request, res: Response) {
     reg.diarioRegistroId = r.id;
     await reg.save();
     res.json({ ok: true, acao: r.acao, enviadoEm: reg.diarioEnviadoEm });
+  } catch (e) {
+    return tratarErro(res, req.usuarioId!, e);
+  }
+}
+
+// GET /api/diario/turmas/:id/alunos -> alunos, materias do professor e periodos da turma do D.E.V
+export async function alunos(req: Request, res: Response) {
+  if (!/^[a-f0-9]{24}$/i.test(req.params.id)) return res.status(400).json({ message: "Turma inválida" });
+  const token = await tokenDo(req.usuarioId!);
+  if (!token) return res.status(409).json({ message: "Conecte sua conta do D.E.V.", reconectar: true });
+  try {
+    res.json(await diario.alunos(token, req.params.id));
   } catch (e) {
     return tratarErro(res, req.usuarioId!, e);
   }

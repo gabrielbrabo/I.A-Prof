@@ -1,5 +1,5 @@
 import { env } from "../../config/env";
-import { CriarAssinatura, DadosPix, Gateway, ResultadoAssinatura } from "./tipos";
+import { CriarAssinatura, CriarCobranca, DadosPix, Gateway, ResultadoAssinatura, ResultadoCobranca } from "./tipos";
 
 // Adapter do Asaas (https://docs.asaas.com). Valores em REAIS na API.
 async function asaas<T>(caminho: string, opcoes: { method?: string; body?: unknown } = {}): Promise<T> {
@@ -24,19 +24,64 @@ const somarCiclo = (d: Date, ciclo: "mensal" | "anual") => {
   return n;
 };
 
+const PAGO = ["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"];
+
+// Cliente: reaproveita pelo CPF/CNPJ
+async function clienteAsaas(c: CriarAssinatura["cliente"]) {
+  const doc = c.cpfCnpj.replace(/\D/g, "");
+  const busca = await asaas<{ data: Array<{ id: string }> }>(`/customers?cpfCnpj=${doc}`);
+  return (
+    busca.data?.[0]?.id ??
+    (
+      await asaas<{ id: string }>("/customers", {
+        method: "POST",
+        body: { name: c.nome, email: c.email, cpfCnpj: doc, mobilePhone: c.telefone?.replace(/\D/g, "") || undefined },
+      })
+    ).id
+  );
+}
+
+function dadosCartao(d: Pick<CriarAssinatura, "cartao" | "titular" | "ip">) {
+  if (!d.cartao || !d.titular) throw new Error("Informe os dados do cartão.");
+  return {
+    creditCard: d.cartao,
+    creditCardHolderInfo: { ...d.titular, cpfCnpj: d.titular.cpfCnpj.replace(/\D/g, ""), postalCode: d.titular.postalCode.replace(/\D/g, ""), phone: d.titular.phone.replace(/\D/g, "") },
+    remoteIp: d.ip,
+  };
+}
+
 export const gatewayAsaas: Gateway = {
+  // Cobranca unica (creditos extras)
+  async criarCobranca(d: CriarCobranca): Promise<ResultadoCobranca> {
+    const customerId = await clienteAsaas(d.cliente);
+    const body: Record<string, unknown> = {
+      customer: customerId,
+      billingType: d.metodo,
+      value: d.valorCentavos / 100,
+      dueDate: hoje(),
+      description: d.descricao,
+      externalReference: d.referencia,
+      ...(d.metodo === "CREDIT_CARD" ? dadosCartao(d) : {}),
+    };
+    const pg = await asaas<{ id: string; status: string; invoiceUrl?: string }>("/payments", { method: "POST", body });
+    return { paymentId: pg.id, pago: PAGO.includes(pg.status), checkoutUrl: pg.invoiceUrl ?? null };
+  },
+
+  async pixCobranca(paymentId): Promise<DadosPix | null> {
+    const pg = await asaas<{ status: string; value: number }>(`/payments/${paymentId}`);
+    if (!["PENDING", "OVERDUE"].includes(pg.status)) return null;
+    const qr = await asaas<{ encodedImage: string; payload: string; expirationDate?: string }>(`/payments/${paymentId}/pixQrCode`);
+    return { imagem: qr.encodedImage, copiaECola: qr.payload, expira: qr.expirationDate ?? null, valorCentavos: Math.round((pg.value ?? 0) * 100) };
+  },
+
+  async cobrancaPaga(paymentId) {
+    const pg = await asaas<{ status: string; deleted?: boolean }>(`/payments/${paymentId}`);
+    if (pg.deleted || ["REFUNDED", "REFUND_REQUESTED", "CHARGEBACK_REQUESTED"].includes(pg.status)) return null;
+    return PAGO.includes(pg.status);
+  },
+
   async criarAssinatura(d: CriarAssinatura): Promise<ResultadoAssinatura> {
-    // Cliente: reaproveita pelo CPF/CNPJ
-    const doc = d.cliente.cpfCnpj.replace(/\D/g, "");
-    const busca = await asaas<{ data: Array<{ id: string }> }>(`/customers?cpfCnpj=${doc}`);
-    const customerId =
-      busca.data?.[0]?.id ??
-      (
-        await asaas<{ id: string }>("/customers", {
-          method: "POST",
-          body: { name: d.cliente.nome, email: d.cliente.email, cpfCnpj: doc, mobilePhone: d.cliente.telefone?.replace(/\D/g, "") || undefined },
-        })
-      ).id;
+    const customerId = await clienteAsaas(d.cliente);
 
     const body: Record<string, unknown> = {
       customer: customerId,
@@ -46,12 +91,7 @@ export const gatewayAsaas: Gateway = {
       cycle: d.ciclo === "anual" ? "YEARLY" : "MONTHLY",
       description: d.descricao,
     };
-    if (d.metodo === "CREDIT_CARD") {
-      if (!d.cartao || !d.titular) throw new Error("Informe os dados do cartão.");
-      body.creditCard = d.cartao;
-      body.creditCardHolderInfo = { ...d.titular, cpfCnpj: d.titular.cpfCnpj.replace(/\D/g, ""), postalCode: d.titular.postalCode.replace(/\D/g, ""), phone: d.titular.phone.replace(/\D/g, "") };
-      body.remoteIp = d.ip;
-    }
+    if (d.metodo === "CREDIT_CARD") Object.assign(body, dadosCartao(d));
     const sub = await asaas<{ id: string; status: string; creditCard?: { creditCardNumber?: string; creditCardBrand?: string } }>("/subscriptions", {
       method: "POST",
       body,

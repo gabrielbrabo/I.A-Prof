@@ -63,6 +63,7 @@ html.dark {
 .dark .bg-indigo-50,
 .dark .bg-indigo-50\/50,
 .dark .bg-indigo-50\/40,
+.dark .bg-indigo-50\/30,
 .dark .hover\:bg-indigo-50:hover { background-color: rgb(99 102 241 / 0.14); }
 .dark .hover\:bg-indigo-100:hover { background-color: rgb(99 102 241 / 0.25); }
 .dark .bg-amber-50 { background-color: rgb(245 158 11 / 0.12); }
@@ -116,3 +117,19 @@ html.dark {
   .fixed.inset-0 > div { max-height: calc(100dvh - 2rem); overflow-y: auto; }
 }
 html { -webkit-text-size-adjust: 100%; }
+
+/* Atividades */
+.dark .bg-emerald-50\/40,
+.dark .hover\:bg-emerald-50:hover { background-color: rgb(16 185 129 / 0.1); }
+.dark .bg-sky-50 { background-color: rgb(14 165 233 / 0.14); }
+.dark .text-sky-700 { color: #7dd3fc; }
+.dark .text-emerald-800,
+.dark .text-emerald-900 { color: #6ee7b7; }
+.dark .border-indigo-100 { border-color: #1e293b; }
+.dark .border-emerald-300 { border-color: rgb(16 185 129 / 0.45); }
+.dark .border-amber-400 { border-color: rgb(245 158 11 / 0.6); }
+.dark .hover\:bg-white:hover { background-color: #1e293b; }
+.dark .hover\:bg-rose-50:hover { background-color: rgb(244 63 94 / 0.12); }
+/* Configuracoes / barra de configuracao */
+.dark .bg-slate-100\/70 { background-color: rgb(30 41 59 / 0.7); }
+.dark .border-dashed.border-indigo-300 { border-color: rgb(99 102 241 / 0.5); }

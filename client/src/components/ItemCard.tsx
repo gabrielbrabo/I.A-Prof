@@ -98,11 +98,12 @@ export default function ItemCard({ item, habilidadesPeriodo, habilidadesOutros =
               onClick={() => onChange({ ...item, confianca: "alta", alterada: false })}
               className="whitespace-nowrap rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600"
               title="Marcar as habilidades como conferidas"
+              data-tour="aula-conferi"
             >
               {item.alterada ? "✓ Confirmar" : "✓ Conferi"}
             </button>
           )}
-          <button onClick={onRemove} className="text-xs text-slate-400 hover:text-rose-600">
+          <button onClick={onRemove} className="text-xs text-slate-400 hover:text-rose-600" data-tour="aula-remover">
             remover
           </button>
         </span>
@@ -110,6 +111,7 @@ export default function ItemCard({ item, habilidadesPeriodo, habilidadesOutros =
 
       <label className="block text-xs font-medium text-slate-500">Conteúdo</label>
       <input
+        data-tour="aula-conteudo"
         value={item.conteudo}
         onChange={(e) => onChange({ ...item, conteudo: e.target.value })}
         className="mb-3 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
@@ -119,7 +121,7 @@ export default function ItemCard({ item, habilidadesPeriodo, habilidadesOutros =
         Habilidades ({item.habilidades.length}/{MAX_HABILIDADES})
       </label>
       {item.habilidades.length > 0 ? (
-        <ul className="mb-2 space-y-1.5">
+        <ul className="mb-2 space-y-1.5" data-tour="aula-habilidades">
           {item.habilidades.map((h) => {
             // Habilidade que nao esta no plano do periodo (ex.: aula antiga aberta pelo Historico): nao pode ser salva
             const outro = periodoDe(h.codigo); // escolhida a mao de outro periodo do plano
@@ -152,6 +154,7 @@ export default function ItemCard({ item, habilidadesPeriodo, habilidadesOutros =
         </p>
       )}
       <select
+        data-tour="aula-add-hab"
         value=""
         disabled={cheio || !opcoes.length}
         onChange={(e) => adicionar(e.target.value)}

@@ -1,6 +1,6 @@
 import { useInstalarApp } from "../lib/useInstalarApp";
 
-// variante "cartao": tela de login/cadastro (destaque embaixo do formulario)
+// So no celular: variante "cartao" (tela de login/cadastro, some no computador) e "menu".
 // variante "topo": botao compacto no cabecalho do app
 // variante "menu": item do menu hamburguer (celular)
 export default function InstalarApp({ variante, onClique }: { variante: "cartao" | "topo" | "menu"; onClique?: () => void }) {
@@ -13,7 +13,7 @@ export default function InstalarApp({ variante, onClique }: { variante: "cartao"
         <button
           type="button"
           onClick={instalar}
-          className="mt-4 flex w-full items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-left hover:bg-indigo-100"
+          className="mt-4 flex w-full items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-left hover:bg-indigo-100 md:hidden"
         >
           <img src="/icon-192.png" alt="" className="h-10 w-10 shrink-0 rounded-lg" />
           <span className="min-w-0 flex-1">

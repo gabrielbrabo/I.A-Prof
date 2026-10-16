@@ -9,10 +9,20 @@ export interface Usuario {
 export interface Situacao {
   acesso: "teste" | "assinante" | "bloqueado";
   motivo: string | null;
+  porLimite?: boolean;
   planoId: string | null;
   planoNome: string | null;
-  teste: { ativo: boolean; ate: string; aulasUsadas: number; aulasLimite: number; diasRestantes: number };
+  teste: {
+    ativo: boolean;
+    ate: string;
+    aulasUsadas: number;
+    aulasLimite: number;
+    atividadesUsadas?: number;
+    atividadesLimite?: number;
+    diasRestantes: number;
+  };
   uso: { percentual: number; mes: string };
+  creditos?: { saldoCentavos: number; podeComprar: boolean };
   assinatura: {
     status: "none" | "active" | "past_due" | "canceled";
     ciclo: "mensal" | "anual" | null;
@@ -65,6 +75,25 @@ export const assinaturaApi = {
   atualizar: () => api<Situacao>("/assinatura/atualizar", { method: "POST" }),
   cancelar: () => api<Situacao>("/assinatura/cancelar", { method: "POST" }),
   reativar: () => api<Situacao>("/assinatura/reativar", { method: "POST" }),
+};
+
+export interface CompraCredito {
+  id: string;
+  valorCentavos: number;
+  metodo: "PIX" | "CREDIT_CARD";
+  status: "pendente" | "pago" | "cancelado";
+  criadoEm: string | null;
+  pagoEm: string | null;
+  checkoutUrl: string | null;
+}
+
+export const creditosApi = {
+  meus: () =>
+    api<{ saldoCentavos: number; podeComprar: boolean; minimoCentavos: number; maximoCentavos: number; compras: CompraCredito[] }>("/creditos"),
+  comprar: (b: { valorCentavos: number } & Record<string, unknown>) =>
+    api<{ compra: CompraCredito; pix: DadosPix | null; pixErro?: string | null; situacao: Situacao }>("/creditos", { method: "POST", body: JSON.stringify(b) }),
+  pix: (id: string) => api<{ pix: DadosPix | null; erro?: string | null }>(`/creditos/${id}/pix`),
+  atualizar: (id: string) => api<{ compra: CompraCredito; situacao: Situacao }>(`/creditos/${id}/atualizar`, { method: "POST" }),
 };
 
 export const reais = (centavos: number) => (centavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
