@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { gravarRascunhoAtividade, lerRascunhoAtividade, RascunhoAtividade } from "../../lib/rascunhoAtividade";
-import { Atividade, atividadesApi, ImagemAtividade, miniatura, PontosPeriodo, TIPOS_DEV, TipoDev, Turma, turmasApi } from "../../api/atividades";
+import { Atividade, atividadesApi, ImagemAtividade, miniatura, PontosPeriodo, Questao, reduzirFoto, TIPOS_DEV, TipoDev, Turma, turmasApi } from "../../api/atividades";
 import { diarioApi, nomeTurmaDiario, SituacaoDiario, TurmaDiario } from "../../api/diario";
 import { planoApi, PlanoCurso } from "../../api/planoCurso";
 import { ANOS } from "../../lib/formatarRegistro";
@@ -149,6 +149,8 @@ function GerarAtividadeTela({
   onFecharEdicao,
   onIrLista,
   podeCorrigir = true,
+  fotoLiberada = false,
+  externa = false,
 }: {
   editar?: Atividade | null;
   diario: SituacaoDiario | null;
@@ -162,8 +164,16 @@ function GerarAtividadeTela({
   onIrLista: (a: Atividade) => void; // depois de aprovar e salvar: vai para a lista
   podeCorrigir?: boolean; // teste gratis: so gera (correcao e notas nos planos pagos)
   rascunho: RascunhoAtividade | null; // atividade nova em andamento (recarregou a pagina, trocou de aba)
+  fotoLiberada?: boolean; // ler gabarito por foto (I.A): Profissional e Premium
+  externa?: boolean; // abrir ja no modo "atividade feita fora" (so gabarito para corrigir)
 }) {
   const r0 = editar ? null : rascunho;
+  // "ia" = gerar com I.A; "externa" = a atividade foi feita fora do I.A Prof: so o gabarito para corrigir
+  const [origem, setOrigem] = useState<"ia" | "externa">(() => (editar?.origem ?? (externa ? "externa" : r0?.origem ?? "ia")) as "ia" | "externa");
+  const ehExterna = origem === "externa";
+  const [qtdQuestoes, setQtdQuestoes] = useState(10);
+  const [tipoQuestoes, setTipoQuestoes] = useState<"multipla" | "vf" | "discursiva" | "completar">("multipla");
+  const [lendoFoto, setLendoFoto] = useState(false);
   const [ano, setAno] = useState(() => editar?.ano ?? r0?.ano ?? lerPref("ano", ""));
   const [anoLetivo, setAnoLetivo] = useState(() => editar?.anoLetivo ?? r0?.anoLetivo ?? Number(lerPref("anoLetivo", String(new Date().getFullYear()))));
   const [periodo, setPeriodo] = useState(() => editar?.periodo ?? r0?.periodo ?? Number(lerPref("ativ.periodo", "0")));
@@ -209,10 +219,10 @@ function GerarAtividadeTela({
     const t = window.setTimeout(() => {
       if (salvaDeVez.current) return;
       if (!atividade && !detalhes.trim()) return void gravarRascunhoAtividade(null);
-      void gravarRascunhoAtividade({ ano, anoLetivo, periodo, turmaChave, turmaNome, componente, materiaDev, tipoDev, valorTotal, detalhes, habSel, atividade, imagensPedido, usouPlano, em: Date.now() });
+      void gravarRascunhoAtividade({ ano, anoLetivo, periodo, turmaChave, turmaNome, componente, materiaDev, tipoDev, valorTotal, detalhes, habSel, atividade, imagensPedido, usouPlano, origem, em: Date.now() });
     }, 600);
     return () => window.clearTimeout(t);
-  }, [editar, ano, anoLetivo, periodo, turmaChave, turmaNome, componente, materiaDev, tipoDev, valorTotal, detalhes, habSel, atividade, imagensPedido, usouPlano]);
+  }, [editar, ano, anoLetivo, periodo, turmaChave, turmaNome, componente, materiaDev, tipoDev, valorTotal, detalhes, habSel, atividade, imagensPedido, usouPlano, origem]);
   const [descartar, setDescartar] = useState(false);
   const [periodosDev, setPeriodosDev] = useState<Array<{ label: string; aberto: boolean; totalPontos: number }>>([]);
   const { dev, locais, erroDev } = useTurmas(diario, anoLetivo);
@@ -367,6 +377,66 @@ function GerarAtividadeTela({
     }
   }
 
+  // ---- Atividade feita fora do I.A Prof: monta o gabarito (a mao ou pela foto) ----
+  const camposOk = (): boolean => {
+    setErro(null);
+    if (!pronto) {
+      setErro(devNotas && !materiaDev ? "Escolha a matéria do D.E.V." : "Preencha série, período e matéria.");
+      return false;
+    }
+    return true;
+  };
+  const montarExterna = (titulo: string, questoes: Questao[]) => {
+    setAtividade({
+      ...dadosBase(),
+      valorTotal,
+      titulo,
+      instrucoes: "",
+      questoes,
+      habilidades: [],
+      imagens: [],
+      cabecalho: undefined,
+      estilo: undefined,
+      texto: undefined,
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+  function gabaritoAMao() {
+    if (!camposOk()) return;
+    const n = Math.max(1, Math.min(30, qtdQuestoes || 1));
+    const qs: Questao[] = Array.from({ length: n }, (_, i) => ({
+      tipo: tipoQuestoes,
+      enunciado: `Questão ${i + 1}`,
+      alternativas: tipoQuestoes === "multipla" ? ["A", "B", "C", "D"] : [],
+      itens: tipoQuestoes === "vf" ? ["a", "b", "c", "d"].map((l) => ({ texto: `Item ${l}`, resposta: "V" as const })) : [],
+      resposta: "",
+      criterios: "",
+      valor: Math.round((valorTotal / n) * 10) / 10,
+      linhas: 0,
+    }));
+    montarExterna(detalhes.trim() || "Atividade", qs);
+    setAviso("✍️ Marque a resposta certa de cada questão (gabarito) e confira os valores. Dá para mudar o tipo de cada questão.");
+  }
+  async function gabaritoPorFoto(arquivos: FileList | null) {
+    if (!arquivos?.length || !camposOk()) return;
+    setLendoFoto(true);
+    try {
+      const fotos = await Promise.all(Array.from(arquivos).slice(0, 4).map((f) => reduzirFoto(f)));
+      const r = await atividadesApi.gabaritoFoto({ ano, componente: componente.trim(), valorTotal }, fotos);
+      onUsouIA();
+      montarExterna(detalhes.trim() || r.titulo, r.questoes);
+      setAviso(
+        r.duvidas.length
+          ? `📷 Gabarito lido da foto. Confira com atenção as questões ${r.duvidas.join(", ")} (a I.A ficou em dúvida) e todas as respostas antes de salvar.`
+          : "📷 Gabarito lido da foto. Confira cada resposta e os valores antes de salvar."
+      );
+    } catch (e) {
+      if (!(e instanceof ErroApi && e.semAcesso)) setErro(e instanceof Error ? e.message : "Erro ao ler a foto");
+    } finally {
+      setLendoFoto(false);
+    }
+  }
+
   const dadosBase = (): Omit<Atividade, "titulo" | "instrucoes" | "questoes" | "habilidades"> => ({
     ano,
     uf: null,
@@ -380,6 +450,7 @@ function GerarAtividadeTela({
     tipoDev,
     detalhes,
     valorTotal,
+    origem,
   });
 
   const problemas = useMemo(() => (atividade ? problemasGabarito(atividade.questoes) : []), [atividade]);
@@ -388,6 +459,7 @@ function GerarAtividadeTela({
     if (!atividade) return;
     setErro(null);
     if (problemas.length) return setErro(problemas[0]);
+    if (!atividade._id && naoCabe) return setModalPontos(pontos); // D.E.V: valor tem que caber no periodo
     setSalvando(true);
     try {
       const salva = await atividadesApi.salvar({ ...atividade, ...dadosBase(), valorTotal: atividade.valorTotal });
@@ -401,6 +473,11 @@ function GerarAtividadeTela({
       if (corrigirDepois) onCorrigir(salva);
       else onIrLista(salva);
     } catch (e) {
+      if (e instanceof ErroApi && e.dados?.semPontos && e.dados.pontos) {
+        setPontos(e.dados.pontos as PontosPeriodo);
+        setModalPontos(e.dados.pontos as PontosPeriodo);
+        return;
+      }
       setErro(e instanceof Error ? e.message : "Erro ao salvar");
     } finally {
       setSalvando(false);
@@ -423,14 +500,38 @@ function GerarAtividadeTela({
           </button>
         </div>
       )}
+      {!editar && !atividade && (
+        <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1 text-sm" role="tablist" data-tour="ativ-origem">
+          <button
+            role="tab"
+            aria-selected={!ehExterna}
+            onClick={() => setOrigem("ia")}
+            className={`rounded-lg px-3 py-2 font-semibold ${!ehExterna ? "bg-white text-indigo-700 shadow-sm" : "text-slate-600 hover:bg-white/60"}`}
+          >
+            ✨ Gerar com a I.A
+          </button>
+          <button
+            role="tab"
+            aria-selected={ehExterna}
+            onClick={() => setOrigem("externa")}
+            className={`rounded-lg px-3 py-2 font-semibold ${ehExterna ? "bg-white text-indigo-700 shadow-sm" : "text-slate-600 hover:bg-white/60"}`}
+          >
+            📥 Já tenho a atividade
+          </button>
+        </div>
+      )}
       {atividade && (
         <div className="space-y-4 rounded-xl border-2 border-indigo-200 bg-indigo-50/30 p-3 sm:p-4">
           <div className="rounded-xl bg-emerald-50 p-3 ring-1 ring-emerald-200 sm:p-4" data-tour="ativ-pronta">
-            <p className="text-base font-bold text-emerald-900">✅ {editar ? "Atividade aberta para editar" : "Atividade gerada!"} Agora confira:</p>
+            <p className="text-base font-bold text-emerald-900">
+              ✅ {editar ? "Atividade aberta para editar" : ehExterna ? "Gabarito pronto para conferir!" : "Atividade gerada!"} Agora confira:
+            </p>
             <ol className="mt-1 space-y-0.5 text-sm text-emerald-900">
-              <li>
-                <b>1.</b> Veja como ficou a folha
-              </li>
+              {!ehExterna && (
+                <li>
+                  <b>1.</b> Veja como ficou a folha
+                </li>
+              )}
               <li>
                 <b>2.</b> Confira o gabarito e os valores (em “Editar à mão”, abaixo)
               </li>
@@ -439,9 +540,9 @@ function GerarAtividadeTela({
               </li>
             </ol>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button onClick={() => setPrevia(true)} data-tour="ativ-ver" className="rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-900">
+              {!ehExterna && <button onClick={() => setPrevia(true)} data-tour="ativ-ver" className="rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-900">
                 👁️ Ver como ficou a folha
-              </button>
+              </button>}
               <button onClick={() => salvar(false)} disabled={salvando} data-tour="ativ-salvar" className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50">
                 {salvando ? "Salvando..." : "✓ Aprovar e salvar"}
               </button>
@@ -473,7 +574,7 @@ function GerarAtividadeTela({
           </div>
           {erro && <p className="rounded-lg bg-rose-50 px-4 py-2.5 text-sm text-rose-700">{erro}</p>}
           {aviso && <p className="rounded-lg bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">{aviso}</p>}
-          <CaixaAjuste valor={ajuste} onChange={setAjuste} onAjustar={() => gerar("ajuste")} ajustando={ajustando} />
+          {!ehExterna && <CaixaAjuste valor={ajuste} onChange={setAjuste} onAjustar={() => gerar("ajuste")} ajustando={ajustando} />}
           <details className="rounded-xl bg-white/60 p-2" open>
             <summary className="cursor-pointer px-1 text-sm font-semibold text-slate-700" data-tour="ativ-editar">✍️ Editar à mão (questões, gabarito, valores, imagens, cabeçalho)</summary>
             <div className="mt-3">
@@ -647,6 +748,8 @@ function GerarAtividadeTela({
         />
       )}
 
+      {!ehExterna && (
+        <>
       {/* Habilidades do plano de curso (periodo + materia) */}
       <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4" data-tour="ativ-habilidades">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -801,6 +904,60 @@ function GerarAtividadeTela({
           <span className="basis-full text-amber-700">⚡ Gerar usa I.A: consome do seu limite do mês (ou dos créditos). No teste grátis, conta como 1 atividade.</span>
         </div>
       </div>
+
+        </>
+      )}
+      {ehExterna && !atividade && (
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3 sm:p-4" data-tour="ativ-externa">
+          <div>
+            <p className="text-sm font-semibold text-slate-700">📥 Atividade feita fora do I.A Prof</p>
+            <p className="text-xs text-slate-500">Coloque o gabarito para corrigir os alunos aqui (com foto ou à mão) e lançar as notas.</p>
+          </div>
+          <label className="block text-xs font-medium text-slate-500">
+            Nome da atividade
+            <input className={campo} value={detalhes} maxLength={200} onChange={(e) => setDetalhes(e.target.value)} placeholder="Ex.: Avaliação de Matemática — frações" />
+          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border-2 border-indigo-200 bg-indigo-50 p-3">
+              <p className="text-sm font-semibold text-indigo-900">📷 Ler o gabarito da foto (I.A)</p>
+              <p className="mt-0.5 text-xs text-indigo-800">Foto da folha (em branco ou já respondida por você) ou da lista de respostas. A I.A monta o gabarito e você confere.</p>
+              {fotoLiberada ? (
+                <>
+                  <label className={`mt-2 inline-block cursor-pointer rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 ${lendoFoto ? "pointer-events-none opacity-50" : ""}`}>
+                    {lendoFoto ? "Lendo a folha…" : "Escolher foto(s)"}
+                    <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => (gabaritoPorFoto(e.target.files), (e.target.value = ""))} />
+                  </label>
+                  <p className="mt-1 text-[11px] text-amber-700">⚡ Usa I.A: consome do seu limite do mês (ou dos créditos). Até 4 páginas.</p>
+                </>
+              ) : (
+                <p className="mt-2 text-xs font-medium text-indigo-900">🔒 Nos planos Profissional e Premium.</p>
+              )}
+            </div>
+            <div className="rounded-xl border-2 border-slate-200 p-3">
+              <p className="text-sm font-semibold text-slate-800">✍️ Digitar o gabarito</p>
+              <p className="mt-0.5 text-xs text-slate-500">Não usa I.A. Depois você marca a resposta certa de cada questão.</p>
+              <div className="mt-2 flex flex-wrap items-end gap-2">
+                <label className="text-xs text-slate-500">
+                  Questões
+                  <input type="number" min={1} max={30} value={qtdQuestoes} onChange={(e) => setQtdQuestoes(Number(e.target.value) || 1)} className={`${campo} w-20`} />
+                </label>
+                <label className="text-xs text-slate-500">
+                  Tipo
+                  <select value={tipoQuestoes} onChange={(e) => setTipoQuestoes(e.target.value as typeof tipoQuestoes)} className={campo}>
+                    <option value="multipla">Marcar X</option>
+                    <option value="vf">V ou F</option>
+                    <option value="discursiva">Discursiva</option>
+                    <option value="completar">Completar</option>
+                  </select>
+                </label>
+                <button onClick={gabaritoAMao} className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-900">
+                  Montar gabarito
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {erro && !atividade && <p className="rounded-lg bg-rose-50 px-4 py-2.5 text-sm text-rose-700">{erro}</p>}
 

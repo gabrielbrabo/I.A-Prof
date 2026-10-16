@@ -92,6 +92,7 @@ export interface Atividade {
   diarioMateriaId: string | null;
   tipoDev: TipoDev;
   detalhes: string;
+  origem?: "ia" | "externa"; // externa = atividade feita fora do I.A Prof (so o gabarito, para corrigir)
   titulo: string;
   instrucoes: string;
   questoes: Questao[];
@@ -232,6 +233,16 @@ export const atividadesApi = {
     fotos.forEach((f, i) => fd.append("fotos", f, `pagina-${i + 1}.jpg`));
     const resp = await fetch(`${BASE}/atividades/${id}/correcoes/${encodeURIComponent(alunoId)}/foto`, { method: "POST", headers: cabecalhoAuth(), body: fd });
     return lerResposta<Correcao>(resp);
+  },
+  // atividade feita fora: a I.A le a folha e monta o gabarito
+  async gabaritoFoto(b: { ano: string; componente: string; valorTotal: number }, fotos: Blob[]): Promise<{ titulo: string; questoes: Questao[]; duvidas: number[] }> {
+    const fd = new FormData();
+    fd.append("ano", b.ano);
+    fd.append("componente", b.componente);
+    fd.append("valorTotal", String(b.valorTotal));
+    fotos.forEach((f, i) => fd.append("fotos", f, `pagina-${i + 1}.jpg`));
+    const resp = await fetch(`${BASE}/atividades/gabarito-foto`, { method: "POST", headers: cabecalhoAuth(), body: fd });
+    return lerResposta(resp);
   },
   lancar: (id: string) =>
     api<{ destino: "dev" | "iaprof"; lancadas: number; criadas?: number; atualizadas?: number }>(`/atividades/${id}/lancar`, { method: "POST" }),

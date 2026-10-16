@@ -134,6 +134,7 @@ function Painel() {
   const [versaoAtiv, setVersaoAtiv] = useState(0);
   const [ativSalva, setAtivSalva] = useState<string | null>(null); // destaque na lista depois de salvar
   const [novaAtiv, setNovaAtiv] = useState(0);
+  const [novaExterna, setNovaExterna] = useState(false); // abrir "Gerar" no modo atividade feita fora
   // Limite de I.A acabou (qualquer tela): card com fundo desfocado oferecendo creditos extras ou mudar de plano
   const [semLimite, setSemLimite] = useState<string | null>(null);
   const [focoCreditos, setFocoCreditos] = useState(0);
@@ -609,6 +610,8 @@ function Painel() {
           <GerarAtividade
             key={atividadeEditar?._id ?? `nova-${novaAtiv}`}
             editar={atividadeEditar}
+            externa={novaExterna}
+            fotoLiberada={situacao?.planoId === "profissional" || situacao?.planoId === "premium"}
             diario={diario}
             professorNome={usuario?.nome}
             onSalva={() => setVersaoAtiv((v) => v + 1)}
@@ -629,6 +632,7 @@ function Painel() {
               setAtividadeCorrigir(null);
               setNovaAtiv((n) => n + 1);
               setAtivSalva(a._id ?? null);
+              setNovaExterna(false);
               ir("atividades");
             }}
           />
@@ -668,6 +672,13 @@ function Painel() {
               }}
               onNova={() => {
                 setAtividadeEditar(null);
+                setNovaExterna(false);
+                setNovaAtiv((n) => n + 1);
+                ir("atividade");
+              }}
+              onExterna={() => {
+                setAtividadeEditar(null);
+                setNovaExterna(true);
                 setNovaAtiv((n) => n + 1);
                 ir("atividade");
               }}

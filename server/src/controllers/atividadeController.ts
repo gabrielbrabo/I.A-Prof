@@ -5,6 +5,7 @@ import { Atividade } from "../models/Atividade";
 import { Correcao } from "../models/Correcao";
 import { Turma } from "../models/Turma";
 import { aprenderDaSalva, aprenderDoAjuste, esquecerPreferencias, preferenciasDoProfessor } from "../services/perfilAtividade";
+import { gabaritoDaFoto } from "../services/atividade";
 import { calcularNota, corrigirComFoto, ErroAtividade, gerarAtividade, limparCabecalho, limparEstilo, limparQuestao, limparTexto, Questao, RespostaAluno } from "../services/atividade";
 import { comMedicao, exigirAcesso, exigirConta, exigirPlanoPago, fecharLote, SemAcesso } from "../services/uso";
 import { diario, ErroDiario } from "../services/diario";
@@ -97,6 +98,7 @@ const salvarSchema = z.object({
   diarioMateriaId: z.string().regex(objectId).nullish(),
   tipoDev: z.enum(["Normal", "Prova", "Trabalho", "Outra Atividade"]).default("Normal"),
   detalhes: z.string().max(1500).default(""),
+  origem: z.enum(["ia", "externa"]).default("ia"),
   titulo: z.string().trim().min(1, "Dê um título").max(200),
   instrucoes: z.string().max(1000).default(""),
   questoes: z.array(questaoSchema).min(1, "A atividade precisa de pelo menos uma questão").max(30),
@@ -151,6 +153,18 @@ export async function salvar(req: Request, res: Response) {
   } catch (e) {
     if (e instanceof SemAcesso) return semAcesso(res, e);
     throw e;
+  }
+  // D.E.V: o valor tem que caber nos pontos que restam no periodo (atividade de fora nao passou pela geracao)
+  if (p.data.diarioTurmaId && p.data.diarioMateriaId) {
+    try {
+      const pts = await pontosDoPeriodo(req.usuarioId!, { turma: p.data.diarioTurmaId, periodo: p.data.periodo, materia: p.data.diarioMateriaId });
+      if (!("erro" in pts)) {
+        const fora = foraDoPeriodo(pts, p.data.valorTotal, p.data.periodo);
+        if (fora) return res.status(422).json({ message: fora, semPontos: true, pontos: pts });
+      }
+    } catch {
+      /* D.E.V fora do ar: salva (o lancamento confere de novo) */
+    }
   }
   const a = await Atividade.create({ ...p.data, ...dadosVisuais(p.data), usuario: req.usuarioId, questoes: dadosQuestoes(p.data.questoes) });
   void aprenderDaSalva(req.usuarioId!, { estilo: a.estilo, cabecalho: a.cabecalho, questoes: a.questoes } as never);
@@ -398,6 +412,30 @@ export async function pontosPeriodo(req: Request, res: Response) {
     res.json(r);
   } catch (e) {
     return tratarErro(res, req.usuarioId!, e);
+  }
+}
+
+// POST /api/atividades/gabarito-foto (multipart: fotos[], ano, componente, valorTotal)
+// Atividade feita fora do I.A Prof: a I.A le a folha e monta o gabarito para corrigir (Profissional e Premium)
+export async function gabaritoFoto(req: Request, res: Response) {
+  const fotos = (req.files as Express.Multer.File[] | undefined) ?? [];
+  if (!fotos.length) return res.status(400).json({ message: "Envie a foto da atividade." });
+  const ano = String(req.body?.ano || "").slice(0, 10);
+  const componente = String(req.body?.componente || "").slice(0, 80);
+  const valorTotal = Math.min(1000, Math.max(0.5, Number(req.body?.valorTotal) || 10));
+  if (!ano || !componente) return res.status(400).json({ message: "Escolha a série e a matéria." });
+  try {
+    await exigirPlanoPago(req.usuarioId!);
+    await exigirAcesso(req.usuarioId!);
+    const r = await comMedicao(req.usuarioId!, () =>
+      gabaritoDaFoto({ serie: ano, componente, valorTotal, fotos: fotos.map((f) => ({ dados: f.buffer, tipo: f.mimetype })) })
+    );
+    res.json(r);
+  } catch (e) {
+    if (e instanceof SemAcesso) return semAcesso(res, e);
+    if (e instanceof ErroAtividade) return res.status(422).json({ message: e.message });
+    console.error("[atividades/gabarito-foto]", e);
+    res.status(500).json({ message: e instanceof Error ? `Não foi possível ler a foto: ${e.message}` : "Erro ao ler a foto" });
   }
 }
 

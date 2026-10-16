@@ -38,6 +38,7 @@ const atividadeSchema = new Schema(
     diarioMateriaId: { type: String, default: null }, // materia do D.E.V
     tipoDev: { type: String, enum: ["Normal", "Prova", "Trabalho", "Outra Atividade"], default: "Normal" },
     detalhes: { type: String, default: "" }, // o que o professor pediu
+    origem: { type: String, enum: ["ia", "externa"], default: "ia" }, // externa = atividade feita fora (so gabarito para corrigir)
     titulo: { type: String, required: true },
     instrucoes: { type: String, default: "" },
     questoes: { type: [questaoSchema], default: [] },

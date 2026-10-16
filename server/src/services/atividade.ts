@@ -528,6 +528,81 @@ export function limparQuestao(q: Partial<Questao>): Questao {
   };
 }
 
+// ---------- Gabarito de uma atividade feita FORA do I.A Prof (lido da foto) ----------
+const SYSTEM_GABARITO = `Você lê a foto de uma atividade escolar (impressa ou feita à mão pelo professor) para montar o GABARITO e corrigir os alunos depois.
+A foto pode ser a folha em branco, a folha já com as respostas marcadas pelo professor, ou só uma lista de respostas ("1-B, 2-V, 3-…").
+Para cada questão, na ordem da folha:
+- "tipo": "multipla" (marcar uma alternativa), "vf" (verdadeiro ou falso, com afirmações), "discursiva" (resposta escrita) ou "completar" (lacunas/resposta curta).
+- "enunciado": o enunciado transcrito de forma resumida (até 300 caracteres). Se não aparece, use "Questão N".
+- "alternativas": textos das alternativas da múltipla escolha, sem a letra. Se só houver letras, use "A", "B", "C"…
+- "itens": afirmações do V/F com a resposta "V" ou "F".
+- "resposta": a resposta certa (letra da alternativa, resposta esperada ou respostas das lacunas na ordem). Se a folha mostrar a resposta marcada/escrita pelo professor, use-a. Se não mostrar, RESOLVA a questão como um professor faria.
+- "criterios": para discursivas, o que vale nota inteira e o que vale metade.
+- "valor": o valor da questão se estiver escrito na folha; senão 0.
+- "duvida": true se você não conseguiu ler bem ou não teve certeza da resposta certa (o professor confere).
+Texto puro: nunca use HTML, markdown ou emojis. Não invente questões que não estão na foto.`;
+
+const SCHEMA_GABARITO = {
+  type: "object",
+  properties: {
+    titulo: { type: "string" },
+    questoes: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          tipo: { type: "string", enum: ["multipla", "vf", "discursiva", "completar"] },
+          enunciado: { type: "string" },
+          alternativas: { type: "array", items: { type: "string" } },
+          itens: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: { texto: { type: "string" }, resposta: { type: "string", enum: ["V", "F"] } },
+              required: ["texto", "resposta"],
+              additionalProperties: false,
+            },
+          },
+          resposta: { type: "string" },
+          criterios: { type: "string" },
+          valor: { type: "number" },
+          duvida: { type: "boolean" },
+        },
+        required: ["tipo", "enunciado", "alternativas", "itens", "resposta", "criterios", "valor", "duvida"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["titulo", "questoes"],
+  additionalProperties: false,
+};
+
+export async function gabaritoDaFoto(p: { serie: string; componente: string; valorTotal: number; fotos: Foto[] }) {
+  const blocos: Anthropic.ContentBlockParam[] = p.fotos.map((f) => ({
+    type: "image",
+    source: { type: "base64", media_type: f.tipo as "image/jpeg" | "image/png" | "image/webp" | "image/gif", data: f.dados.toString("base64") },
+  }));
+  blocos.push({ type: "text", text: `Série: ${nomeAno(p.serie)} · ${p.componente}
+Valor total da atividade: ${p.valorTotal}
+Monte o gabarito das questões das imagens acima (pode ter mais de uma página).` });
+  const r = await chamarJson<{ titulo: string; questoes: Array<Partial<Questao> & { duvida?: boolean }> }>({
+    system: SYSTEM_GABARITO,
+    mensagem: blocos,
+    formato: { nome: "gabarito_foto", schema: SCHEMA_GABARITO },
+    maxTokens: 8000,
+    modelo: env.anthropicModelCorrecaoDiscursiva || undefined, // leitura caprichada (modelo da correcao com questoes abertas)
+  });
+  const brutas = (r.questoes || []).slice(0, 30);
+  const questoes = brutas.map((q, i) => {
+    const l = limparQuestao({ ...q, figura: { tipo: "", conteudo: "" } });
+    if (!l.enunciado) l.enunciado = `Questão ${i + 1}`;
+    return l;
+  });
+  if (!questoes.length) throw new ErroAtividade("Não consegui ler as questões na foto. Tire outra foto com a folha inteira, reta e bem iluminada — ou digite o gabarito à mão.");
+  const duvidas = brutas.map((q, i) => (q.duvida ? i + 1 : 0)).filter(Boolean);
+  return { titulo: textoPuro(r.titulo) || "Atividade", questoes: ajustarValores(questoes, p.valorTotal), duvidas };
+}
+
 // ---------- Corrigir pela foto ----------
 const SYSTEM_CORRIGIR = `Você corrige atividades de alunos da educação básica a partir de fotos da folha respondida, usando o gabarito do professor.
 Para cada questão do gabarito:

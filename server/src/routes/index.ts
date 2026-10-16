@@ -67,6 +67,16 @@ router.delete("/turmas/:id", h(tur.remover));
 router.post("/atividades/gerar", h(ativ.gerar));
 router.get("/atividades/preferencias", h(ativ.preferencias));
 router.get("/atividades/pontos-periodo", h(ativ.pontosPeriodo));
+router.post(
+  "/atividades/gabarito-foto",
+  (req, res, next) =>
+    ativ.uploadFotos(req, res, (err: unknown) => {
+      if (!err) return next();
+      const msg = (err as { code?: string }).code === "LIMIT_FILE_SIZE" ? "Foto muito grande (máx. 8 MB)." : err instanceof Error ? err.message : "Erro no envio da foto";
+      res.status(400).json({ message: msg });
+    }),
+  h(ativ.gabaritoFoto)
+);
 router.delete("/atividades/preferencias", h(ativ.esquecer));
 router.get("/atividades", h(ativ.listar));
 router.post("/atividades", h(ativ.salvar));
