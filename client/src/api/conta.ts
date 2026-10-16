@@ -21,7 +21,7 @@ export interface Situacao {
     atividadesLimite?: number;
     diasRestantes: number;
   };
-  uso: { percentual: number; mes: string };
+  uso: { percentual: number; mes: string; renovaEm?: string | null }; // renovaEm: YYYY-MM-DD (dia da assinatura)
   creditos?: { saldoCentavos: number; podeComprar: boolean };
   assinatura: {
     status: "none" | "active" | "past_due" | "canceled";

@@ -73,6 +73,7 @@ export async function assinar(req: Request, res: Response) {
         providerSubscriptionId: r.subscriptionId,
         checkoutUrl: r.checkoutUrl,
         periodoFim: r.periodoFim,
+        inicioCiclo: r.status === "active" ? new Date() : null, // PIX: comeca quando o pagamento confirmar
         cancelarNoFim: false,
         cartaoFinal: r.cartaoFinal ?? null,
         cartaoBandeira: r.cartaoBandeira ?? null,

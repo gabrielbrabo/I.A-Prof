@@ -12,6 +12,8 @@ const assinaturaSchema = new Schema(
     providerSubscriptionId: { type: String, default: null },
     checkoutUrl: { type: String, default: null }, // fatura do Asaas (PIX)
     periodoFim: { type: Date, default: null },
+    // dia em que a assinatura ficou ativa: o limite de I.A renova todo mes nesse dia (mensal e anual)
+    inicioCiclo: { type: Date, default: null },
     cancelarNoFim: { type: Boolean, default: false },
     cartaoFinal: { type: String, default: null },
     cartaoBandeira: { type: String, default: null },
@@ -19,5 +21,14 @@ const assinaturaSchema = new Schema(
   },
   { timestamps: true }
 );
+
+// Ficou ativa agora (pagou a 1a vez ou voltou a assinar): o ciclo do limite comeca hoje
+assinaturaSchema.post("init", function (doc) {
+  (this as unknown as { _statusAnterior?: string })._statusAnterior = doc.status;
+});
+assinaturaSchema.pre("save", function () {
+  const anterior = (this as unknown as { _statusAnterior?: string })._statusAnterior;
+  if (this.status === "active" && (anterior !== "active" || !this.inicioCiclo)) this.inicioCiclo = new Date();
+});
 
 export const Assinatura = model("Assinatura", assinaturaSchema);

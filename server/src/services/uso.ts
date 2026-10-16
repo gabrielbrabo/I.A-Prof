@@ -42,13 +42,36 @@ export function somarCustoUsd(usd: number) {
   if (m) m.custoUsd += usd;
 }
 
-const mesAtual = () => new Date().toISOString().slice(0, 7);
+// ---------- Ciclo do limite de I.A ----------
+// Assinante: renova todo mes no DIA em que assinou (no anual tambem, mes a mes).
+// Teste gratis: um limite so para o teste inteiro (nao renova).
+type AssinaturaCiclo = { status: string; periodoFim?: Date | null; inicioCiclo?: Date | null; createdAt?: Date } | null;
+const BRT = 3 * 3600000; // horario de Brasilia
+const diasNoMes = (y: number, m: number) => new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+export function cicloDeUso(a: AssinaturaCiclo, agora = Date.now()): { chave: string; inicio: string | null; renovaEm: string | null } {
+  if (!a || !assinaturaValida(a)) return { chave: "teste", inicio: null, renovaEm: null };
+  const ref = new Date(new Date(a.inicioCiclo ?? a.createdAt ?? agora).getTime() - BRT);
+  const dia = ref.getUTCDate();
+  const diaNo = (y: number, m: number) => Math.min(dia, diasNoMes(y, m)); // dia 31 em fevereiro = dia 28/29
+  const h = new Date(agora - BRT);
+  let y = h.getUTCFullYear();
+  let m = h.getUTCMonth();
+  if (h.getUTCDate() < diaNo(y, m)) {
+    m -= 1;
+    if (m < 0) (m = 11), (y -= 1);
+  }
+  const ny = m === 11 ? y + 1 : y;
+  const nm = (m + 1) % 12;
+  const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
+  const inicio = iso(Date.UTC(y, m, diaNo(y, m)));
+  return { chave: `c${inicio}`, inicio, renovaEm: iso(Date.UTC(ny, nm, diaNo(ny, nm))) };
+}
 
-// Limite do mes do professor (centavos de custo real): plano assinado ou teste
-async function limiteDo(usuarioId: string) {
+// Ciclo atual e limite do professor (centavos de custo real): plano assinado ou teste
+async function cicloELimite(usuarioId: string) {
   const a = await Assinatura.findOne({ usuario: usuarioId }).lean();
   const plano = assinaturaValida(a as never) && a ? planoPorId(a.planoId) : null;
-  return plano ? plano.limiteIaCentavos : TESTE.limiteIaCentavos;
+  return { chave: cicloDeUso(a as never).chave, limite: plano ? plano.limiteIaCentavos : TESTE.limiteIaCentavos };
 }
 
 // Executa fn medindo o custo da I.A e grava no consumo do mes do professor.
@@ -61,8 +84,9 @@ export async function comMedicao<T>(usuarioId: string, fn: () => Promise<T>, opc
     if (m.chamadas > 0 || m.custoUsd > 0) {
       const custoCentavos = m.custoUsd * env.cotacaoDolar * 100;
       try {
+        const { chave, limite } = await cicloELimite(usuarioId);
         const doc = await UsoMensal.findOneAndUpdate(
-          { usuario: usuarioId, mes: mesAtual() },
+          { usuario: usuarioId, mes: chave },
           {
             $inc: {
               custoCentavos,
@@ -76,7 +100,6 @@ export async function comMedicao<T>(usuarioId: string, fn: () => Promise<T>, opc
         ).lean();
         const depois = doc?.custoCentavos ?? custoCentavos;
         const antes = depois - custoCentavos;
-        const limite = await limiteDo(usuarioId);
         const excesso = Math.max(0, depois - Math.max(limite, antes));
         if (excesso > 0) {
           await Usuario.updateOne({ _id: usuarioId }, [
@@ -109,7 +132,7 @@ export interface Situacao {
     atividadesLimite: number;
     diasRestantes: number;
   };
-  uso: { percentual: number; mes: string }; // % do limite de I.A do mes
+  uso: { percentual: number; mes: string; renovaEm: string | null }; // % do limite de I.A do ciclo; mes = chave do ciclo
   creditos: { saldoCentavos: number; podeComprar: boolean }; // saldo em REAIS pagos (valor que o professor ve)
   assinatura: {
     status: string;
@@ -126,12 +149,10 @@ export const assinaturaValida = (a: { status: string; periodoFim?: Date | null }
   !!a && a.status === "active" && (!a.periodoFim || a.periodoFim.getTime() > Date.now() - 3 * 86400000); // 3 dias de tolerancia
 
 export async function situacaoDoUsuario(usuarioId: string): Promise<Situacao> {
-  const [u, a, uso] = await Promise.all([
-    Usuario.findById(usuarioId).lean(),
-    Assinatura.findOne({ usuario: usuarioId }).lean(),
-    UsoMensal.findOne({ usuario: usuarioId, mes: mesAtual() }).lean(),
-  ]);
+  const [u, a] = await Promise.all([Usuario.findById(usuarioId).lean(), Assinatura.findOne({ usuario: usuarioId }).lean()]);
   if (!u) throw new Error("Usuário não encontrado");
+  const ciclo = cicloDeUso(a as never);
+  const uso = await UsoMensal.findOne({ usuario: usuarioId, mes: ciclo.chave }).lean();
   const agora = Date.now();
   // Fim do teste: o que estiver salvo ou cadastro + TESTE.dias (contas antigas ganham o prazo novo)
   const criadoEm = new Date((u as { createdAt?: Date }).createdAt ?? u.testeAte).getTime();
@@ -157,7 +178,7 @@ export async function situacaoDoUsuario(usuarioId: string): Promise<Situacao> {
     if (gasto >= limite && !temCredito) {
       acesso = "bloqueado";
       porLimite = true;
-      motivo = `Você usou 100% do limite de I.A do plano ${plano?.nome} neste mês. O limite renova no dia 1º — ou compre créditos extras / mude para um plano maior.`;
+      motivo = `Você usou 100% do limite de I.A do plano ${plano?.nome} neste mês. O limite renova em ${ciclo.renovaEm ? ciclo.renovaEm.split("-").reverse().join("/") : "breve"} — ou compre créditos extras / mude para um plano maior.`;
     }
   } else if (testeAtivo) {
     acesso = "teste";
@@ -192,7 +213,7 @@ export async function situacaoDoUsuario(usuarioId: string): Promise<Situacao> {
       atividadesLimite: TESTE.atividades,
       diasRestantes,
     },
-    uso: { percentual, mes: mesAtual() },
+    uso: { percentual, mes: ciclo.chave, renovaEm: ciclo.renovaEm },
     creditos: { saldoCentavos: Math.floor(creditos / env.creditos.fator), podeComprar: assinante }, // creditos so para quem tem plano ativo (completam o limite do mes)
     assinatura: a
       ? {
@@ -243,7 +264,7 @@ export async function exigirAcesso(usuarioId: string, opcoes: OpcoesAcesso = {})
   if (s.acesso !== "bloqueado") {
     if (opcoes.abrirLote) {
       // guarda o gasto de agora: se o limite/creditos acabarem no meio, a tarefa termina com uma folga a partir daqui
-      const uso = await UsoMensal.findOne({ usuario: usuarioId, mes: mesAtual() }).lean();
+      const uso = await UsoMensal.findOne({ usuario: usuarioId, mes: s.uso.mes }).lean();
       await Usuario.updateOne(
         { _id: usuarioId },
         { $set: { loteIa: { chave: opcoes.abrirLote, ate: new Date(Date.now() + prazoDo(opcoes.abrirLote)), gasto: uso?.custoCentavos ?? 0 } } }
@@ -260,11 +281,11 @@ export async function exigirAcesso(usuarioId: string, opcoes: OpcoesAcesso = {})
 }
 
 async function podeTerminarLote(usuarioId: string, chave: string) {
-  const [u, a, uso] = await Promise.all([
+  const [u, a] = await Promise.all([
     Usuario.findById(usuarioId, { loteIa: 1, creditosCentavos: 1 }).lean(),
     Assinatura.findOne({ usuario: usuarioId }).lean(),
-    UsoMensal.findOne({ usuario: usuarioId, mes: mesAtual() }).lean(),
   ]);
+  const uso = await UsoMensal.findOne({ usuario: usuarioId, mes: cicloDeUso(a as never).chave }).lean();
   const lote = u?.loteIa;
   if (!lote?.chave || lote.chave !== chave || !lote.ate || new Date(lote.ate).getTime() < Date.now()) return false;
   const plano = assinaturaValida(a as never) && a ? planoPorId(a.planoId) : null;

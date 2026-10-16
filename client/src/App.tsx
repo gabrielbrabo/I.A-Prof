@@ -468,7 +468,9 @@ function Painel() {
               <p className="mt-1 text-[11px] text-slate-400">
                 {teste
                   ? `${t.diasRestantes} dia(s) restante(s) · ${Math.max(0, limiteQtd - usados)} ${emAtiv ? "atividade(s)" : "aula(s)"} restante(s).${emAtiv ? " No teste, a correção com foto é dos planos Profissional e Premium; à mão é liberada." : " Vale o que acabar primeiro."}`
-                  : "Renova todo dia 1º."}
+                  : situacao.uso.renovaEm
+                    ? `Renova em ${situacao.uso.renovaEm.split("-").reverse().slice(0, 2).join("/")}.`
+                    : ""}
                 {saldo > 0 && !teste && <> · ⚡ Créditos extras: {reais(saldo)}</>}
                 {(teste || pct >= 90) && (
                   <>

@@ -106,7 +106,7 @@ const SECOES: Secao[] = [
     icone: "💳",
     titulo: "Assinatura e uso da I.A",
     passos: [
-      "A barra “Uso de I.A neste mês” mostra quanto você já usou. O limite renova todo dia 1º.",
+      "A barra “Uso de I.A neste mês” mostra quanto você já usou. O limite renova todo mês no dia em que você assinou (no plano anual também, mês a mês).",
       "Teste grátis: 30 dias, com 30 aulas e 10 atividades. Em Atividades, o teste gera, imprime, corrige à mão e lança notas; a correção com foto (I.A) é dos planos Profissional e Premium (no Essencial, a correção é à mão).",
       "Em 💳 Minha assinatura você escolhe o plano e paga com PIX (QR Code na tela) ou cartão (cobrança automática).",
       "Acabou o limite e precisa terminar um trabalho? Em ⚡ Créditos extras você escolhe um valor e paga uma vez. O saldo não vence e só é usado depois do limite do mês.",

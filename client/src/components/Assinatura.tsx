@@ -130,7 +130,7 @@ export default function Assinatura({
               <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                 <div className={`h-full ${corUso}`} style={{ width: `${s.uso.percentual}%` }} />
               </div>
-              <p className="mt-1 text-[11px] text-slate-400">Renova todo dia 1º.</p>
+              <p className="mt-1 text-[11px] text-slate-400">{s.uso.renovaEm ? `Renova em ${s.uso.renovaEm.split("-").reverse().join("/")} (todo mês no dia da sua assinatura).` : "Limite único do teste grátis."}</p>
             </div>
           </div>
           {s.motivo && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">{s.motivo}</p>}

@@ -178,7 +178,7 @@ export const PASSOS_INICIO: PassoTour[] = [
     titulo: "Atividades",
     texto: "Gere atividades com gabarito, imprima, corrija com foto ou à mão e lance as notas (no D.E.V ou numa lista aqui).",
   },
-  { alvo: "uso", titulo: "Uso do mês", texto: "Aqui você acompanha quanto já usou da I.A neste mês. Renova todo dia 1º." },
+  { alvo: "uso", titulo: "Uso do mês", texto: "Aqui você acompanha quanto já usou da I.A. O limite renova todo mês no dia da sua assinatura." },
   {
     alvo: "dev",
     titulo: "Diário D.E.V",

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { gravarRascunhoAtividade, lerRascunhoAtividade, RascunhoAtividade } from "../../lib/rascunhoAtividade";
 import { Atividade, atividadesApi, ImagemAtividade, miniatura, TIPOS_DEV, TipoDev, Turma, turmasApi } from "../../api/atividades";
 import { diarioApi, nomeTurmaDiario, SituacaoDiario, TurmaDiario } from "../../api/diario";
 import { planoApi, PlanoCurso } from "../../api/planoCurso";
@@ -122,8 +123,22 @@ export function SeletorTurma({
   );
 }
 
-export default function GerarAtividade({
+type PropsGerar = Parameters<typeof GerarAtividadeTela>[0];
+
+// Atividade nova: antes de abrir, busca o rascunho (atividade gerada e ainda nao salva) para nao gerar de novo
+export default function GerarAtividade(props: Omit<PropsGerar, "rascunho">) {
+  const [rascunho, setRascunho] = useState<RascunhoAtividade | null | undefined>(props.editar ? null : undefined);
+  useEffect(() => {
+    if (props.editar) return;
+    lerRascunhoAtividade().then(setRascunho);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  if (rascunho === undefined) return <p className="text-sm text-slate-500">Carregando…</p>;
+  return <GerarAtividadeTela {...props} rascunho={rascunho} />;
+}
+
+function GerarAtividadeTela({
   editar,
+  rascunho,
   diario,
   professorNome,
   onSalva,
@@ -146,20 +161,22 @@ export default function GerarAtividade({
   onFecharEdicao: () => void;
   onIrLista: (a: Atividade) => void; // depois de aprovar e salvar: vai para a lista
   podeCorrigir?: boolean; // teste gratis: so gera (correcao e notas nos planos pagos)
+  rascunho: RascunhoAtividade | null; // atividade nova em andamento (recarregou a pagina, trocou de aba)
 }) {
-  const [ano, setAno] = useState(() => editar?.ano ?? lerPref("ano", ""));
-  const [anoLetivo, setAnoLetivo] = useState(() => editar?.anoLetivo ?? Number(lerPref("anoLetivo", String(new Date().getFullYear()))));
-  const [periodo, setPeriodo] = useState(() => editar?.periodo ?? Number(lerPref("ativ.periodo", "0")));
-  const [turmaChave, setTurmaChave] = useState(() => (editar ? chaveTurma(editar) : lerPref("ativ.turma", "")));
-  const [turmaNome, setTurmaNome] = useState<string | null>(() => editar?.turma ?? null);
-  const [componente, setComponente] = useState(() => editar?.componente ?? "");
-  const [materiaDev, setMateriaDev] = useState<string>(() => editar?.diarioMateriaId ?? "");
-  const [tipoDev, setTipoDev] = useState<TipoDev>(() => editar?.tipoDev ?? "Normal");
-  const [valorTotal, setValorTotal] = useState(() => editar?.valorTotal ?? Number(lerPref("ativ.valor", "10")));
-  const [detalhes, setDetalhes] = useState(() => editar?.detalhes ?? "");
-  const [atividade, setAtividade] = useState<Atividade | null>(editar ?? null);
+  const r0 = editar ? null : rascunho;
+  const [ano, setAno] = useState(() => editar?.ano ?? r0?.ano ?? lerPref("ano", ""));
+  const [anoLetivo, setAnoLetivo] = useState(() => editar?.anoLetivo ?? r0?.anoLetivo ?? Number(lerPref("anoLetivo", String(new Date().getFullYear()))));
+  const [periodo, setPeriodo] = useState(() => editar?.periodo ?? r0?.periodo ?? Number(lerPref("ativ.periodo", "0")));
+  const [turmaChave, setTurmaChave] = useState(() => (editar ? chaveTurma(editar) : r0?.turmaChave ?? lerPref("ativ.turma", "")));
+  const [turmaNome, setTurmaNome] = useState<string | null>(() => editar?.turma ?? r0?.turmaNome ?? null);
+  const [componente, setComponente] = useState(() => editar?.componente ?? r0?.componente ?? "");
+  const [materiaDev, setMateriaDev] = useState<string>(() => editar?.diarioMateriaId ?? r0?.materiaDev ?? "");
+  const [tipoDev, setTipoDev] = useState<TipoDev>(() => editar?.tipoDev ?? r0?.tipoDev ?? "Normal");
+  const [valorTotal, setValorTotal] = useState(() => editar?.valorTotal ?? r0?.valorTotal ?? Number(lerPref("ativ.valor", "10")));
+  const [detalhes, setDetalhes] = useState(() => editar?.detalhes ?? r0?.detalhes ?? "");
+  const [atividade, setAtividade] = useState<Atividade | null>(editar ?? r0?.atividade ?? null);
   // Imagens do professor (logo, figuras): antes de gerar ficam aqui; depois, dentro da atividade
-  const [imagensPedido, setImagensPedido] = useState<ImagemAtividade[]>(() => editar?.imagens ?? []);
+  const [imagensPedido, setImagensPedido] = useState<ImagemAtividade[]>(() => editar?.imagens ?? r0?.imagensPedido ?? []);
   const imgs = atividade?.imagens ?? imagensPedido;
   const setImgs = (l: ImagemAtividade[]) => (atividade ? setAtividade({ ...atividade, imagens: l }) : setImagensPedido(l));
   // A I.A pode pedir algo que falta (ex.: a logo); o professor responde e gera de novo
@@ -174,15 +191,29 @@ export default function GerarAtividade({
   useEffect(() => {
     atividadesApi.preferencias().then(setAprendido).catch(() => setAprendido(null));
   }, []);
-  const [usouPlano, setUsouPlano] = useState<boolean | null>(null);
+  const [usouPlano, setUsouPlano] = useState<boolean | null>(() => r0?.usouPlano ?? null);
   const [gerando, setGerando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(() =>
+    r0?.atividade ? "📝 Sua atividade gerada continua aqui (ainda não salva). Confira, aprove e salve." : null
+  );
   const [plano, setPlano] = useState<PlanoCurso | null>(null);
   const [carregandoPlano, setCarregandoPlano] = useState(false);
-  const [habSel, setHabSel] = useState<string[]>(() => editar?.habilidades.map((h) => h.codigo) ?? []);
+  const [habSel, setHabSel] = useState<string[]>(() => editar?.habilidades.map((h) => h.codigo) ?? r0?.habSel ?? []);
   const [materiasDev, setMateriasDev] = useState<Array<{ id: string; nome: string }> | null>(null);
+  // Guarda a atividade nova em andamento (recarregar a pagina nao perde o que ja foi gerado)
+  const salvaDeVez = useRef(false);
+  useEffect(() => {
+    if (editar || salvaDeVez.current) return;
+    const t = window.setTimeout(() => {
+      if (salvaDeVez.current) return;
+      if (!atividade && !detalhes.trim()) return void gravarRascunhoAtividade(null);
+      void gravarRascunhoAtividade({ ano, anoLetivo, periodo, turmaChave, turmaNome, componente, materiaDev, tipoDev, valorTotal, detalhes, habSel, atividade, imagensPedido, usouPlano, em: Date.now() });
+    }, 600);
+    return () => window.clearTimeout(t);
+  }, [editar, ano, anoLetivo, periodo, turmaChave, turmaNome, componente, materiaDev, tipoDev, valorTotal, detalhes, habSel, atividade, imagensPedido, usouPlano]);
+  const [descartar, setDescartar] = useState(false);
   const [periodosDev, setPeriodosDev] = useState<Array<{ label: string; aberto: boolean; totalPontos: number }>>([]);
   const { dev, locais, erroDev } = useTurmas(diario, anoLetivo);
   const ehDev = turmaChave.startsWith("dev:");
@@ -338,6 +369,8 @@ export default function GerarAtividade({
     setSalvando(true);
     try {
       const salva = await atividadesApi.salvar({ ...atividade, ...dadosBase(), valorTotal: atividade.valorTotal });
+      salvaDeVez.current = true; // salva no servidor: o rascunho nao e mais necessario
+      await gravarRascunhoAtividade(null);
       gravarPref("ano", ano);
       gravarPref("ativ.turma", turmaChave);
       gravarPref("ativ.periodo", String(periodo));
@@ -390,6 +423,25 @@ export default function GerarAtividade({
               <button onClick={() => salvar(false)} disabled={salvando} data-tour="ativ-salvar" className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50">
                 {salvando ? "Salvando..." : "✓ Aprovar e salvar"}
               </button>
+              {!editar &&
+                (descartar ? (
+                  <button
+                    onClick={() => {
+                      setAtividade(null);
+                      setImagensPedido([]);
+                      setUsouPlano(null);
+                      setAviso(null);
+                      setDescartar(false);
+                    }}
+                    className="rounded-xl bg-rose-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-rose-700"
+                  >
+                    Confirmar: descartar
+                  </button>
+                ) : (
+                  <button onClick={() => setDescartar(true)} className="rounded-xl px-3 py-2.5 text-sm text-slate-500 hover:bg-white" title="Apagar esta atividade (sem salvar)">
+                    🗑️ Descartar
+                  </button>
+                ))}
               {podeCorrigir && (
                 <button onClick={() => salvar(true)} disabled={salvando} data-tour="ativ-salvar-corrigir" className="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50">
                   Salvar e corrigir →
