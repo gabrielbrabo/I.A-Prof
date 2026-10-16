@@ -466,8 +466,16 @@ export default function RegistroAula({
     }
   }
 
-  async function salvar(duplicado?: "substituir" | "juntar" | "nova") {
+  // Materia sem habilidade: o professor confirma (ou volta ao card para adicionar uma)
+  const [semHabilidade, setSemHabilidade] = useState<string[] | null>(null);
+  async function salvar(duplicado?: "substituir" | "juntar" | "nova", confirmouSemHabilidade = false) {
     if (!itens || (!itens.length && !abertura.length)) return;
+    const vazias = itens.filter((i) => !i.habilidades.length).map((i) => i.componente || "Matéria");
+    if (vazias.length && !confirmouSemHabilidade && !duplicado) {
+      setSemHabilidade(vazias);
+      return;
+    }
+    setSemHabilidade(null);
     setAulaNoDia(null);
     setErro(null);
     setSalvando(true);
@@ -868,6 +876,7 @@ export default function RegistroAula({
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {itens.map((it, idx) => (
+              <div key={idx} id={`card-materia-${idx}`} className="scroll-mt-24">
               <ItemCard
                 key={idx}
                 item={it}
@@ -879,6 +888,7 @@ export default function RegistroAula({
                 onChange={(novo) => setItens((l) => l!.map((x, i) => (i === idx ? novo : x)))}
                 onRemove={() => setItens((l) => l!.filter((_, i) => i !== idx))}
               />
+              </div>
             ))}
           </div>
 
@@ -1020,6 +1030,40 @@ export default function RegistroAula({
             </div>
           </div>
         </>
+      )}
+      {semHabilidade && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm" onClick={() => setSemHabilidade(null)} role="dialog" aria-modal="true" aria-labelledby="titulo-sem-hab">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-2xl">⚠️</div>
+            <p id="titulo-sem-hab" className="text-lg font-bold text-slate-800">
+              {semHabilidade.length > 1 ? "Matérias sem habilidade" : "Matéria sem habilidade"}
+            </p>
+            <p className="mt-1 text-sm text-slate-600">
+              Não encontrei habilidade do plano de curso para <b>{[...new Set(semHabilidade)].join(", ")}</b>. Vá até o card da matéria e use <b>“+ Adicionar habilidade do plano”</b>, ou confirme
+              para salvar assim mesmo.
+            </p>
+            <div className="mt-4 grid gap-2">
+              <button
+                onClick={() => {
+                  setSemHabilidade(null);
+                  const idx = itens?.findIndex((i) => !i.habilidades.length) ?? -1;
+                  const el = document.getElementById(`card-materia-${idx}`);
+                  el?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  el?.querySelector("select")?.focus({ preventScroll: true });
+                }}
+                className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+              >
+                Ir ao card e adicionar habilidade
+              </button>
+              <button onClick={() => salvar(undefined, true)} className="rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                Salvar sem habilidade mesmo assim
+              </button>
+              <button onClick={() => setSemHabilidade(null)} className="rounded-lg px-4 py-2 text-sm text-slate-500 hover:bg-slate-100">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {conflitoDiario && <ModalConflitoDiario data={data} atual={conflitoDiario.atual} enviando={enviandoDiario} onEscolher={decidirConflitoDiario} />}
 
