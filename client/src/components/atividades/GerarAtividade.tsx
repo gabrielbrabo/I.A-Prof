@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { gravarRascunhoAtividade, lerRascunhoAtividade, RascunhoAtividade } from "../../lib/rascunhoAtividade";
-import { Atividade, atividadesApi, ImagemAtividade, miniatura, TIPOS_DEV, TipoDev, Turma, turmasApi } from "../../api/atividades";
+import { Atividade, atividadesApi, ImagemAtividade, miniatura, PontosPeriodo, TIPOS_DEV, TipoDev, Turma, turmasApi } from "../../api/atividades";
 import { diarioApi, nomeTurmaDiario, SituacaoDiario, TurmaDiario } from "../../api/diario";
 import { planoApi, PlanoCurso } from "../../api/planoCurso";
 import { ANOS } from "../../lib/formatarRegistro";
@@ -272,6 +272,19 @@ function GerarAtividadeTela({
   }, [turmaDev?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const periodoDev = periodosDev.find((p) => p.label === `${periodo}º BIMESTRE`);
+  // D.E.V (turma com notas): as atividades somadas nao podem passar os pontos do periodo
+  const [pontos, setPontos] = useState<PontosPeriodo | null>(null);
+  const [modalPontos, setModalPontos] = useState<PontosPeriodo | null>(null);
+  useEffect(() => {
+    setPontos(null);
+    if (!devNotas || !turmaDev || !materiaDev || !periodo) return;
+    atividadesApi
+      .pontosPeriodo({ turma: turmaDev.id, periodo, materia: materiaDev, excluir: atividade?._id ?? null })
+      .then(setPontos)
+      .catch(() => setPontos(null));
+  }, [devNotas, turmaDev?.id, materiaDev, periodo, atividade?._id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const valorAtual = atividade ? atividade.valorTotal : valorTotal;
+  const naoCabe = !!pontos && pontos.restante != null && valorAtual > pontos.restante + 1e-9;
   const pronto = !!ano && periodo > 0 && !!componente.trim() && (!devNotas || !!materiaDev);
   const precisaHabilidade = habilidadesDisp.length > 0 && !habEscolhidas.length;
 
@@ -282,6 +295,7 @@ function GerarAtividadeTela({
     if (precisaHabilidade) return setErro("Escolha pelo menos uma habilidade do plano de curso para a atividade.");
     if (detalhes.trim().length < 3) return setErro("Descreva a atividade que você quer.");
     if (modo === "ajuste" && (!atividade || !ajuste.trim())) return;
+    if (modo === "novo" && naoCabe) return setModalPontos(pontos); // nao gasta I.A com valor que nao cabe no periodo
     if (modo === "ajuste") setAjustando(true);
     else setGerando(true);
     try {
@@ -307,6 +321,9 @@ function GerarAtividadeTela({
         ajuste: modo === "ajuste" ? ajuste.trim() : null,
         escola: atividade?.cabecalho?.escola || turmaDev?.escola || null,
         professor: nomeProfessor,
+        diarioTurmaId: devNotas && turmaDev ? turmaDev.id : null,
+        diarioMateriaId: devNotas ? materiaDev || null : null,
+        atividadeId: atividade?._id ?? null,
       });
       onUsouIA();
       if (r.status === "perguntas") {
@@ -337,6 +354,11 @@ function GerarAtividadeTela({
         setAviso("✓ Ajuste feito. Confira abaixo.");
       }
     } catch (e) {
+      if (e instanceof ErroApi && e.dados?.semPontos && e.dados.pontos) {
+        setPontos(e.dados.pontos as PontosPeriodo);
+        setModalPontos(e.dados.pontos as PontosPeriodo);
+        return;
+      }
       if (!(e instanceof ErroApi && e.semAcesso)) setErro(e instanceof Error ? e.message : "Erro ao gerar");
       else setErro(e.message);
     } finally {
@@ -600,8 +622,29 @@ function GerarAtividadeTela({
       {devNotas && periodoDev && !periodoDev.aberto && (
         <p className="rounded-lg bg-rose-50 px-4 py-2.5 text-sm text-rose-700">📒 O {periodo}º período desta turma está fechado no D.E.V: dá para gerar e corrigir, mas as notas só entram no D.E.V se a escola reabrir.</p>
       )}
-      {devNotas && periodoDev && periodoDev.totalPontos > 0 && (
-        <p className="-mt-2 text-xs text-slate-500">📒 No D.E.V, o {periodo}º período vale {periodoDev.totalPontos} pontos no total por matéria.</p>
+      {devNotas && pontos && pontos.total > 0 ? (
+        <p className={`-mt-2 text-xs ${naoCabe ? "font-semibold text-rose-600" : "text-slate-500"}`} data-tour="ativ-pontos">
+          📒 D.E.V — {periodo}º período: {fmtPts(pontos.total)} pontos · {fmtPts(pontos.usadoDev)} já lançados
+          {pontos.pendente > 0 ? ` · ${fmtPts(pontos.pendente)} em atividades salvas aqui` : ""} · <b>restam {fmtPts(pontos.restante ?? 0)}</b>
+          {naoCabe ? " — o valor desta atividade não cabe." : "."}
+        </p>
+      ) : (
+        devNotas &&
+        periodoDev &&
+        periodoDev.totalPontos > 0 && <p className="-mt-2 text-xs text-slate-500">📒 No D.E.V, o {periodo}º período vale {periodoDev.totalPontos} pontos no total por matéria.</p>
+      )}
+      {modalPontos && (
+        <ModalPontos
+          pontos={modalPontos}
+          periodo={periodo}
+          valor={valorAtual}
+          onUsar={(v) => {
+            setValorTotal(v);
+            if (atividade) setAtividade({ ...atividade, valorTotal: v });
+            setModalPontos(null);
+          }}
+          onFechar={() => setModalPontos(null)}
+        />
       )}
 
       {/* Habilidades do plano de curso (periodo + materia) */}
@@ -802,6 +845,59 @@ function GerarAtividadeTela({
         </p>
       )}
 
+    </div>
+  );
+}
+
+const fmtPts = (n: number) => String(Math.round(n * 100) / 100).replace(".", ",");
+
+// Valor da atividade maior do que resta no periodo do D.E.V (card com fundo desfocado)
+function ModalPontos({
+  pontos,
+  periodo,
+  valor,
+  onUsar,
+  onFechar,
+}: {
+  pontos: PontosPeriodo;
+  periodo: number;
+  valor: number;
+  onUsar: (v: number) => void;
+  onFechar: () => void;
+}) {
+  const resta = pontos.restante ?? 0;
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm" onClick={onFechar} role="dialog" aria-modal="true" aria-labelledby="titulo-pontos">
+      <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-2xl">📒</div>
+        <p id="titulo-pontos" className="text-lg font-bold text-slate-800">
+          O valor não cabe no {periodo}º período
+        </p>
+        <p className="mt-1 text-sm text-slate-600">
+          No D.E.V, as atividades somadas não podem passar o total do período nesta matéria. A atividade vale <b>{fmtPts(valor)}</b>, mas restam só{" "}
+          <b>{fmtPts(resta)}</b> pontos.
+        </p>
+        <ul className="mt-3 space-y-1 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          <li>Total do {periodo}º período: {fmtPts(pontos.total)} pontos</li>
+          <li>Já lançados no D.E.V: {fmtPts(pontos.usadoDev)}</li>
+          {pontos.pendente > 0 && <li>Em atividades salvas aqui (ainda não lançadas): {fmtPts(pontos.pendente)}</li>}
+          <li className="font-semibold text-slate-700">Restam: {fmtPts(resta)}</li>
+        </ul>
+        <div className="mt-4 grid gap-2">
+          {resta > 0 ? (
+            <button onClick={() => onUsar(resta)} className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
+              Usar {fmtPts(resta)} pontos nesta atividade
+            </button>
+          ) : (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              Não restam pontos nesta matéria neste período. Escolha outro período ou diminua o valor das atividades já salvas.
+            </p>
+          )}
+          <button onClick={onFechar} className="rounded-lg px-4 py-2 text-sm text-slate-500 hover:bg-slate-100">
+            Fechar
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -35,7 +35,7 @@ export const cabecalhoAuth = (): Record<string, string> => {
 
 // Erro da API com o status (401 = sessao, 402 = sem acesso/limite)
 export class ErroApi extends Error {
-  constructor(message: string, public status: number, public semAcesso = false) {
+  constructor(message: string, public status: number, public semAcesso = false, public dados: Record<string, unknown> = {}) {
     super(message);
   }
 }
@@ -47,6 +47,6 @@ export async function lerResposta<T>(resp: Response): Promise<T> {
   if (resp.status === 401 && lerToken()) sair();
   // Sem limite de I.A / sem plano: o App mostra o aviso (com comprar creditos / mudar de plano)
   if (resp.status === 402) window.dispatchEvent(new CustomEvent("iaprof:semAcesso", { detail: dados.message || "" }));
-  if (!resp.ok) throw new ErroApi(dados.message || `Erro ${resp.status}`, resp.status, !!dados.semAcesso);
+  if (!resp.ok) throw new ErroApi(dados.message || `Erro ${resp.status}`, resp.status, !!dados.semAcesso, dados as Record<string, unknown>);
   return dados as T;
 }

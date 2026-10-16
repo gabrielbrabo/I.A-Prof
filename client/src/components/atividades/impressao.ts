@@ -45,7 +45,9 @@ const CSS_IMG = `.topo{display:flex;align-items:center;gap:12px;margin-bottom:6p
   .fig .emoji{font-size:2.4em;line-height:1.2;letter-spacing:4px}
   .texto{border:1.5px solid #999;border-radius:8px;padding:10px 14px;margin:0 0 16px;page-break-inside:avoid}
   .texto h2{margin:0 0 6px;font-size:1.15em;text-align:center} .texto p{margin:0 0 6px;text-align:justify}
-  .texto img{display:block;margin:6px auto;max-height:200px;max-width:70%;object-fit:contain}`;
+  .texto{display:flow-root} .texto img{display:block;margin:6px auto;max-height:200px;max-width:70%;object-fit:contain}
+  .texto img.dir{float:right;width:38%;max-width:38%;max-height:none;margin:2px 0 8px 14px}
+  .texto img.esq{float:left;width:38%;max-width:38%;max-height:none;margin:2px 14px 8px 0}`;
 
 const montarHtml = (titulo: string, corpo: string, extraCss = "") =>
   `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(titulo)}</title><style>${CSS}${CSS_IMG}${extraCss}</style></head><body>${corpo}</body></html>`;
@@ -138,11 +140,22 @@ export function imprimirAtividade(a: Atividade, extra: { professor?: string; esc
   imprimirHtml(a.titulo, corpo, css);
 }
 
+// Atividades antigas podem ter vindo com HTML da I.A: mostra so o texto (nunca as tags)
+function textoPuro(s: string) {
+  if (!/<\/?[a-z][\s\S]*?>|&[a-z#0-9]+;/i.test(s)) return s;
+  const d = new DOMParser().parseFromString(
+    s.replace(/<\s*br\s*\/?>/gi, "\n").replace(/<\/\s*(p|div|h[1-6]|li)\s*>/gi, "\n\n"),
+    "text/html"
+  );
+  return (d.body.textContent ?? "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function corpoAtividade(a: Atividade, extra: { professor?: string; escola?: string }) {
   const t = a.texto;
   const timg = t?.imagem ? a.imagens?.find((i) => i.id === t.imagem) : null;
+  const classeImg = t?.posicao === "direita" ? ' class="dir"' : t?.posicao === "esquerda" ? ' class="esq"' : "";
   const textoHtml = t?.conteudo?.trim()
-    ? `<div class="texto">${t.titulo ? `<h2>${esc(t.titulo)}</h2>` : ""}${timg ? `<img src="${timg.dataUrl}" alt="">` : ""}${t.conteudo
+    ? `<div class="texto">${t.titulo ? `<h2>${esc(textoPuro(t.titulo))}</h2>` : ""}${timg ? `<img${classeImg} src="${timg.dataUrl}" alt="">` : ""}${textoPuro(t.conteudo)
         .trim()
         .split(/\n+/)
         .map((par) => `<p>${esc(par)}</p>`)

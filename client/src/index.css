@@ -133,3 +133,15 @@ html { -webkit-text-size-adjust: 100%; }
 /* Configuracoes / barra de configuracao */
 .dark .bg-slate-100\/70 { background-color: rgb(30 41 59 / 0.7); }
 .dark .border-dashed.border-indigo-300 { border-color: rgb(99 102 241 / 0.5); }
+/* Gerar atividade: caixa "Editar à mão" e caixa de ajuste (violeta) no tema escuro */
+.dark .bg-white\/60 { background-color: rgb(19 28 46 / 0.6); }
+.dark .bg-indigo-50\/30 { background-color: rgb(99 102 241 / 0.08); }
+.dark .bg-gradient-to-br.from-violet-50 { background-image: linear-gradient(to bottom right, rgb(139 92 246 / 0.16), rgb(99 102 241 / 0.1)); }
+.dark .border-violet-300 { border-color: rgb(167 139 250 / 0.5); }
+.dark .focus\:border-violet-500:focus { border-color: rgb(167 139 250); }
+.dark .ring-violet-200 { --tw-ring-color: rgb(167 139 250 / 0.4); }
+.dark .hover\:bg-violet-100:hover { background-color: rgb(139 92 246 / 0.25); }
+.dark .text-violet-700 { color: #c4b5fd; }
+.dark .text-violet-800,
+.dark .text-violet-900 { color: #ddd6fe; }
+.dark .bg-emerald-50\/40 { background-color: rgb(16 185 129 / 0.1); }

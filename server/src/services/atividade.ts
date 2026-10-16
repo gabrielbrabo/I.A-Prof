@@ -31,6 +31,31 @@ export interface TextoBase {
   titulo: string;
   conteudo: string;
   imagem: string; // id da ilustracao do texto
+  posicao: "topo" | "direita" | "esquerda"; // onde fica a imagem; direita/esquerda = o texto contorna a imagem
+}
+export const POSICOES_TEXTO = ["topo", "direita", "esquerda"] as const;
+
+// A folha mostra TEXTO PURO: se a I.A mandar HTML/markdown, vira texto normal (nunca aparece "<p>" para o professor)
+const ENTIDADES: Record<string, string> = { nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", ordm: "º", ordf: "ª", deg: "°", hellip: "…", mdash: "—", ndash: "–", laquo: "«", raquo: "»" };
+export function textoPuro(s: unknown): string {
+  let t = String(s ?? "");
+  if (/<\/?[a-z][\s\S]*?>|&[a-z#0-9]+;/i.test(t)) {
+    t = t
+      .replace(/<\s*br\s*\/?>/gi, "\n")
+      .replace(/<\s*li[^>]*>/gi, "\n- ")
+      .replace(/<\/\s*(p|div|h[1-6]|li|tr|blockquote|section|article)\s*>/gi, "\n\n")
+      .replace(/<(script|style)[\s\S]*?<\/\1>/gi, "")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+      .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+      .replace(/&([a-z]+);/gi, (m, n) => ENTIDADES[n.toLowerCase()] ?? m);
+  }
+  return t
+    .replace(/\*\*(.+?)\*\*/g, "$1") // **negrito** de markdown
+    .replace(/^[ \t]{0,3}#{1,6}[ \t]+/gm, "") // # titulos de markdown
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 export interface Cabecalho {
   escola: string;
@@ -130,7 +155,9 @@ Regras:
 - Não coloque a resposta no enunciado.
 - "instrucoes": uma linha para o aluno (ex.: "Leia com atenção e responda.").
 
-Leitura e interpretação: se o professor pedir leitura/interpretação de texto (ou "texto"), escreva em "texto" um texto ORIGINAL adequado à série (título + conteúdo: fábula, conto, notícia, poema, bilhete, receita… conforme o pedido; 1º/2º ano: curto, frases simples; 3º–5º: 1 a 3 parágrafos) e faça as questões sobre ESSE texto (localizar informação, inferir, sentido de palavra, ideia principal, opinião…). Sem texto de apoio: "texto" com campos vazios.
+FORMATO DO TEXTO: tudo é TEXTO PURO. NUNCA use HTML (<p>, <br>, <b>, <div>…), markdown (**, #) ou qualquer tag/código. Parágrafos do texto de apoio separados por uma linha em branco. Versos de poema: um por linha.
+
+Leitura e interpretação: se o professor pedir leitura/interpretação de texto (ou "texto"), escreva em "texto" um texto ORIGINAL adequado à série (título + conteúdo: fábula, conto, notícia, poema, bilhete, receita… conforme o pedido; 1º/2º ano: curto, frases simples; 3º–5º: 1 a 3 parágrafos) e faça as questões sobre ESSE texto (localizar informação, inferir, sentido de palavra, ideia principal, opinião…). Sem texto de apoio: "texto" com campos vazios. "texto.posicaoImagem": onde fica a imagem do texto — "topo" (acima do texto, padrão), "direita" ou "esquerda" (a imagem fica ao lado e o texto CONTORNA a imagem). Se o professor pedir o texto ao lado/em volta/contornando a imagem, ou a imagem à direita/esquerda, use "direita"/"esquerda" conforme o pedido.
 
 Quantidade: faça EXATAMENTE o número de questões pedido. "Variadas/abertas e fechadas": misture tipos (fechadas = multipla e vf; abertas = discursiva e completar), metade de cada se não disser.
 
@@ -145,9 +172,9 @@ Aproveitamento da folha: "estilo.layout" = "compacto" (menos espaço em branco, 
 SEJA FIEL AO PROFESSOR — a atividade deve ficar exatamente do jeito que ele pediu (tema, quantidade, tipos, nível, linguagem, visual, cabeçalho, imagens, fonte grande, colorida…). Nunca ignore um pedido.
 
 Imagens e figuras:
-- "figura" de cada questão é uma ilustração feita por você: {"tipo":"emoji","conteudo":"🍎🍎🍎"} (emojis grandes — preferido: barato e bonito) ou {"tipo":"svg","conteudo":"<svg ...>…</svg>"} (desenho simples e colorido, viewBox pequeno, só formas básicas, no máximo 1500 caracteres, no máximo 4 desenhos SVG por atividade). Sem figura: {"tipo":"","conteudo":""}.
-- Se o professor pedir imagens/figuras/desenhos/ilustrações (ou a atividade for para crianças pequenas e ele pedir algo atrativo), coloque figura em TODAS ou quase todas as questões. Figuras de contagem devem ter a quantidade certa.
-- "ilustracao" de cada questão (e do texto): quando o professor pedir IMAGENS, descreva em português, em uma frase concreta, a ilustração que deve ser desenhada para aquela questão (ex.: "três maçãs vermelhas em cima de uma mesa", "um menino lendo um livro embaixo de uma árvore"). Ela vira uma imagem de verdade. Nunca peça texto escrito dentro da imagem. Para questões de contagem, diga a quantidade exata. Sem imagem: "". Mesmo com "ilustracao", preencha "figura" com um emoji parecido (fica de reserva).
+- NUNCA use emojis (nem no texto, nem no enunciado, nem nas alternativas, nem em "figura") a menos que o professor PEÇA emojis. Sem pedido de imagem: nada de figura, nada de emoji.
+- "ilustracao" de cada questão (e do texto): quando o professor pedir IMAGENS/figuras/desenhos/ilustrações, descreva em português, em uma frase concreta, a ilustração que deve ser desenhada para aquela questão (ex.: "três maçãs vermelhas em cima de uma mesa", "um menino lendo um livro embaixo de uma árvore"). Ela vira uma imagem de verdade. Coloque em TODAS ou quase todas as questões. Nunca peça texto escrito dentro da imagem. Para questões de contagem, diga a quantidade exata. Sem pedido de imagem: "".
+- "figura": deixe {"tipo":"","conteudo":""}. Só use {"tipo":"emoji",...} se o professor pedir emojis; e {"tipo":"svg","conteudo":"<svg ...>…</svg>"} (desenho simples, no máximo 1500 caracteres, no máximo 4 por atividade) só se ele pedir imagens e "Gerar imagens de verdade" for "não disponível".
 - "imagem" de cada questão: o id de uma imagem ENVIADA pelo professor (lista "Imagens do professor") quando ele pedir para usá-la na questão; senão "".
 - "cabecalho.logo": id da imagem enviada que é a logo/brasão da escola, se o professor pedir para colocar no cabeçalho; senão "".
 - "cabecalho.escola": nome da escola, se o professor informar; senão "".
@@ -159,6 +186,7 @@ Se houver "Respostas do professor", use-as.
 
 AJUSTE: se houver "Atividade atual" + "Pedido de ajuste", aplique TODAS as mudanças pedidas, de forma visível e caprichada, e mantenha o resto (mesmas questões, gabarito e valores, a menos que o ajuste peça mudança). Devolva a atividade inteira.
 - "Melhorar/trocar as imagens" → escreva em "ilustracao" uma descrição NOVA, mais rica e específica (cena, cores, quantidade, expressão) para cada questão que deve ter imagem — as imagens com "ilustracao" preenchida são desenhadas de novo. Para manter a imagem atual de uma questão, deixe "ilustracao" vazia e repita o "imagem" dela.
+- "Texto contornando/ao lado da imagem", "imagem à direita/esquerda" → "texto.posicaoImagem" = "direita"/"esquerda" (e mantenha a imagem do texto).
 - "Usar melhor o espaço/folha" → ajuste "estilo.layout" (compacto), "estilo.imagem", "estilo.colunas" e "linhas".
 - "Mais fácil/difícil", "trocar questão", "letra maior", "mais colorida", "tirar a nota do cabeçalho"… → mude exatamente isso.
 Nunca devolva a atividade igual: o professor precisa ver o ajuste feito.
@@ -212,8 +240,13 @@ const SCHEMA_ATIVIDADE = {
     },
     texto: {
       type: "object",
-      properties: { titulo: { type: "string" }, conteudo: { type: "string" }, ilustracao: { type: "string" } },
-      required: ["titulo", "conteudo", "ilustracao"],
+      properties: {
+        titulo: { type: "string" },
+        conteudo: { type: "string" },
+        ilustracao: { type: "string" },
+        posicaoImagem: { type: "string", enum: ["topo", "direita", "esquerda"] },
+      },
+      required: ["titulo", "conteudo", "ilustracao", "posicaoImagem"],
       additionalProperties: false,
     },
     status: { type: "string", enum: ["pronta", "perguntas"] },
@@ -306,7 +339,7 @@ export async function gerarAtividade(p: {
   }
   const ids = imagens.map((i) => i.id);
   const partes = [
-    `Série: ${nomeAno(p.ano)}\nComponente: ${p.componente}\nPeríodo: ${p.periodo}º\nValor total da atividade: ${p.valorTotal}\nTurma: ${p.turma || "-"}\nEscola: ${p.escola || "-"}\nProfessor(a): ${p.professor || "-"}\nGerar imagens de verdade: ${imagensLigadas() ? "sim (use \"ilustracao\")" : "não disponível (use só \"figura\" com emoji/desenho)"}`,
+    `Série: ${nomeAno(p.ano)}\nComponente: ${p.componente}\nPeríodo: ${p.periodo}º\nValor total da atividade: ${p.valorTotal}\nTurma: ${p.turma || "-"}\nEscola: ${p.escola || "-"}\nProfessor(a): ${p.professor || "-"}\nGerar imagens de verdade: ${imagensLigadas() ? "sim (use \"ilustracao\")" : "não disponível (use só \"figura\" com desenho SVG, se ele pedir imagens)"}`,
     lista,
     `Imagens do professor: ${imagens.length ? imagens.map((i) => `"${i.id}" (${i.nome})`).join(", ") : "nenhuma enviada"}`,
     ...(p.preferencias ? [p.preferencias] : []),
@@ -325,7 +358,7 @@ export async function gerarAtividade(p: {
     perguntas: string[];
     titulo: string;
     instrucoes: string;
-    texto: { titulo: string; conteudo: string; ilustracao: string };
+    texto: { titulo: string; conteudo: string; ilustracao: string; posicaoImagem?: TextoBase["posicao"] };
     habilidades: string[];
     questoes: QuestaoIA[];
     cabecalho: Cabecalho;
@@ -355,8 +388,17 @@ export async function gerarAtividade(p: {
   // No ajuste, a I.A as vezes "esquece" de repetir a imagem atual: mantem, a menos que o pedido seja tirar
   const atuais = (Array.isArray((p.atual as { questoes?: unknown })?.questoes) ? (p.atual as { questoes: Questao[] }).questoes : []) as Questao[];
   const pediuTirar = /\b(tir|remov|sem imag|sem figur|apag)/i.test(p.ajuste ?? "");
+  // Emoji so se o professor pedir (no pedido, nas respostas ou no ajuste)
+  const pediuEmoji = /emoji|emotic|carinha/i.test(`${p.detalhes} ${p.respostas ?? ""} ${p.ajuste ?? ""}`);
+  const semEmoji = (t: string) => (pediuEmoji ? t : t.replace(/[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{FE0F}\u{200D}\u{20E3}]/gu, "").replace(/ {2,}/g, " ").trim());
   const questoes = brutas.map((q, i) => {
     const l = limparQuestao(q);
+    if (!pediuEmoji) {
+      if (l.figura?.tipo === "emoji") l.figura = { tipo: "", conteudo: "" };
+      l.enunciado = semEmoji(l.enunciado);
+      l.alternativas = l.alternativas.map(semEmoji);
+      l.itens = l.itens.map((it) => ({ ...it, texto: semEmoji(it.texto) }));
+    }
     if (p.ajuste && !l.imagem && !String(q.ilustracao ?? "").trim() && !pediuTirar && atuais[i]?.imagem) l.imagem = String(atuais[i].imagem);
     if (l.imagem && !ids.includes(l.imagem)) l.imagem = "";
     if (l.figura?.tipo === "svg" && ++svgs > 6) l.figura = { tipo: "", conteudo: "" };
@@ -367,7 +409,10 @@ export async function gerarAtividade(p: {
   // Imagens de verdade (I.A de imagem) para o texto e as questoes que pediram ilustracao
   const imagensIA: Array<{ id: string; nome: string; dataUrl: string }> = [];
   const imagemTextoAtual = String((p.atual as { texto?: { imagem?: string } } | null)?.texto?.imagem ?? "");
-  const texto = limparTexto({ titulo: r.texto?.titulo, conteudo: r.texto?.conteudo, imagem: pediuTirar ? "" : imagemTextoAtual }, ids);
+  const texto = limparTexto(
+    { titulo: semEmoji(textoPuro(r.texto?.titulo)), conteudo: semEmoji(textoPuro(r.texto?.conteudo)), imagem: pediuTirar ? "" : imagemTextoAtual, posicao: r.texto?.posicaoImagem },
+    ids
+  );
   if (imagensLigadas()) {
     const pedidos: Array<{ alvo: number; descricao: string }> = []; // alvo -1 = texto
     const descTexto = String(r.texto?.ilustracao ?? "").trim();
@@ -382,7 +427,7 @@ export async function gerarAtividade(p: {
     const geradas = await gerarImagens(lote.map((x) => x.descricao.slice(0, 400)), nomeAno(p.ano));
     lote.forEach((x, k) => {
       const dataUrl = geradas[k];
-      if (!dataUrl) return; // falhou: fica o emoji/desenho de reserva
+      if (!dataUrl) return; // falhou: a questao fica sem imagem
       const id = `ia${imagensIA.length + 1}-${Date.now().toString(36)}`;
       imagensIA.push({ id, nome: `I.A: ${x.descricao.slice(0, 30)}`, dataUrl });
       if (x.alvo === -1) texto.imagem = id;
@@ -395,8 +440,8 @@ export async function gerarAtividade(p: {
   return {
     status: "pronta" as const,
     perguntas: [] as string[],
-    titulo: String(r.titulo || "Atividade").trim(),
-    instrucoes: String(r.instrucoes || "").trim(),
+    titulo: semEmoji(textoPuro(r.titulo || "Atividade")) || "Atividade",
+    instrucoes: semEmoji(textoPuro(r.instrucoes || "")),
     texto,
     questoes: ajustarValores(questoes, p.valorTotal),
     habilidades: escolhidas,
@@ -438,9 +483,10 @@ export function limparEstilo(e: Partial<Estilo> | null | undefined, ano?: string
 }
 export function limparTexto(t: Partial<TextoBase> | null | undefined, ids: string[]): TextoBase {
   return {
-    titulo: String(t?.titulo ?? "").trim().slice(0, 200),
-    conteudo: String(t?.conteudo ?? "").trim().slice(0, 8000),
+    titulo: textoPuro(t?.titulo).slice(0, 200),
+    conteudo: textoPuro(t?.conteudo).slice(0, 8000),
     imagem: t?.imagem && ids.includes(String(t.imagem)) ? String(t.imagem) : "",
+    posicao: POSICOES_TEXTO.includes(t?.posicao as never) ? (t!.posicao as TextoBase["posicao"]) : "topo",
   };
 }
 
@@ -456,25 +502,25 @@ export function quantidadePedida(texto: string): number | null {
 // Normaliza uma questao (vinda da I.A ou do professor)
 export function limparQuestao(q: Partial<Questao>): Questao {
   const tipo: TipoQuestao = ["multipla", "vf", "discursiva", "completar"].includes(String(q.tipo)) ? (q.tipo as TipoQuestao) : "discursiva";
-  const alternativas = tipo === "multipla" ? (q.alternativas || []).map((a) => String(a).replace(/^\s*[A-Ea-e][).]\s+/, "").trim()).filter(Boolean).slice(0, 6) : [];
-  let resposta = String(q.resposta ?? "").trim();
+  const alternativas = tipo === "multipla" ? (q.alternativas || []).map((a) => textoPuro(a).replace(/^\s*[A-Ea-e][).]\s+/, "").trim()).filter(Boolean).slice(0, 6) : [];
+  let resposta = textoPuro(q.resposta);
   if (tipo === "multipla") {
     resposta = resposta.toUpperCase().slice(0, 1);
     if (!alternativas.some((_, i) => letra(i) === resposta)) resposta = "";
   }
   return {
     tipo,
-    enunciado: String(q.enunciado ?? "").trim(),
+    enunciado: textoPuro(q.enunciado),
     alternativas,
     itens:
       tipo === "vf"
         ? (q.itens || [])
-            .map((it) => ({ texto: String(it?.texto ?? "").trim(), resposta: (String(it?.resposta).toUpperCase() === "F" ? "F" : "V") as "V" | "F" }))
+            .map((it) => ({ texto: textoPuro(it?.texto), resposta: (String(it?.resposta).toUpperCase() === "F" ? "F" : "V") as "V" | "F" }))
             .filter((it) => it.texto)
             .slice(0, 10)
         : [],
     resposta,
-    criterios: tipo === "discursiva" ? String(q.criterios ?? "").trim() : "",
+    criterios: tipo === "discursiva" ? textoPuro(q.criterios) : "",
     valor: Math.max(0, Math.round((Number(q.valor) || 0) * 100) / 100),
     imagem: String(q.imagem ?? "").slice(0, 40),
     figura: limparFigura(q.figura),

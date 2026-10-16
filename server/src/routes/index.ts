@@ -66,6 +66,7 @@ router.delete("/turmas/:id", h(tur.remover));
 // Atividades: gerar, salvar, corrigir (manual ou foto) e lancar notas
 router.post("/atividades/gerar", h(ativ.gerar));
 router.get("/atividades/preferencias", h(ativ.preferencias));
+router.get("/atividades/pontos-periodo", h(ativ.pontosPeriodo));
 router.delete("/atividades/preferencias", h(ativ.esquecer));
 router.get("/atividades", h(ativ.listar));
 router.post("/atividades", h(ativ.salvar));

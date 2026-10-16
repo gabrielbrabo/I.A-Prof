@@ -63,6 +63,7 @@ const atividadeSchema = new Schema(
       titulo: { type: String, default: "" },
       conteudo: { type: String, default: "" },
       imagem: { type: String, default: "" },
+      posicao: { type: String, enum: ["topo", "direita", "esquerda"], default: "topo" }, // onde fica a imagem do texto
     },
     diario: {
       atividadeId: { type: String, default: null }, // id da atividade no D.E.V depois do primeiro envio

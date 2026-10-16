@@ -36,10 +36,18 @@ export interface Estilo {
   colunas?: boolean; // alternativas em 2 colunas
 }
 // Texto de apoio (leitura e interpretacao)
+export interface PontosPeriodo {
+  total: number; // 0 = sem limite cadastrado
+  usadoDev: number;
+  pendente: number;
+  restante: number | null;
+  aberto: boolean;
+}
 export interface TextoBase {
   titulo: string;
   conteudo: string;
   imagem: string;
+  posicao?: "topo" | "direita" | "esquerda"; // imagem do texto: em cima, ou ao lado com o texto contornando
 }
 export const CAMPOS_CABECALHO: Array<{ id: string; nome: string }> = [
   { id: "escola", nome: "Escola" },
@@ -182,6 +190,9 @@ export const atividadesApi = {
     ajuste?: string | null;
     escola?: string | null;
     professor?: string | null;
+    diarioTurmaId?: string | null; // D.E.V: o servidor confere os pontos do periodo
+    diarioMateriaId?: string | null;
+    atividadeId?: string | null;
   }) =>
     api<{
       status: "pronta" | "perguntas";
@@ -200,6 +211,9 @@ export const atividadesApi = {
       body: JSON.stringify(b),
     }),
   listar: () => api<Atividade[]>("/atividades"),
+  // pontos do periodo no D.E.V (ja lancado + salvo aqui e nao lancado)
+  pontosPeriodo: (q: { turma: string; periodo: number; materia: string; excluir?: string | null }) =>
+    api<PontosPeriodo>(`/atividades/pontos-periodo?${new URLSearchParams(Object.entries(q).filter(([, v]) => v != null && v !== "").map(([k, v]) => [k, String(v)])).toString()}`),
   // o que a I.A ja aprendeu do jeito do professor
   preferencias: () => api<{ texto: string; salvas: number; ajustes: number }>("/atividades/preferencias"),
   esquecerPreferencias: () => api<{ ok: boolean }>("/atividades/preferencias", { method: "DELETE" }),

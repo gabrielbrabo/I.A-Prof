@@ -216,7 +216,7 @@ export default function EditorAtividade({ valor, onChange }: { valor: Atividade;
         <div className="rounded-xl border border-slate-200 bg-white p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-sm font-semibold text-slate-700">📖 Texto para leitura</p>
-            <button type="button" onClick={() => set({ texto: { titulo: "", conteudo: "", imagem: "" } })} className="text-xs text-rose-500 hover:underline">
+            <button type="button" onClick={() => set({ texto: { titulo: "", conteudo: "", imagem: "", posicao: "topo" } })} className="text-xs text-rose-500 hover:underline">
               tirar texto
             </button>
           </div>
@@ -224,13 +224,13 @@ export default function EditorAtividade({ valor, onChange }: { valor: Atividade;
             className={campo}
             value={a.texto?.titulo ?? ""}
             placeholder="Título do texto"
-            onChange={(e) => set({ texto: { titulo: e.target.value, conteudo: a.texto?.conteudo ?? "", imagem: a.texto?.imagem ?? "" } })}
+            onChange={(e) => set({ texto: { ...(a.texto ?? { conteudo: "", imagem: "" }), titulo: e.target.value } })}
           />
           <textarea
             rows={Math.min(14, Math.max(4, Math.ceil((a.texto?.conteudo.length ?? 0) / 90)))}
             className={`${campo} mt-2`}
             value={a.texto?.conteudo ?? ""}
-            onChange={(e) => set({ texto: { titulo: a.texto?.titulo ?? "", conteudo: e.target.value, imagem: a.texto?.imagem ?? "" } })}
+            onChange={(e) => set({ texto: { ...(a.texto ?? { titulo: "", imagem: "" }), conteudo: e.target.value } })}
           />
           {imagemPorId(a.texto?.imagem) && (
             <span className="relative mt-2 inline-block">
@@ -244,6 +244,20 @@ export default function EditorAtividade({ valor, onChange }: { valor: Atividade;
                 ×
               </button>
             </span>
+          )}
+          {imagemPorId(a.texto?.imagem) && (
+            <label className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+              Imagem do texto:
+              <select
+                value={a.texto?.posicao ?? "topo"}
+                onChange={(e) => set({ texto: { ...(a.texto ?? { titulo: "", conteudo: "", imagem: "" }), posicao: e.target.value as "topo" | "direita" | "esquerda" } })}
+                className="rounded border border-slate-300 px-1 py-0.5"
+              >
+                <option value="topo">Em cima do texto</option>
+                <option value="direita">À direita (texto contorna)</option>
+                <option value="esquerda">À esquerda (texto contorna)</option>
+              </select>
+            </label>
           )}
         </div>
       ) : (

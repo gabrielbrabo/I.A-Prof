@@ -7,6 +7,7 @@ import { limites } from "../config/limites";
 import { comMedicao, exigirAcesso, SemAcesso } from "../services/uso";
 import { diario } from "../services/diario";
 import { tokenDo } from "./diarioController";
+import { travaAula } from "../services/travaDiario";
 
 // Limite de saida: o professor pode informar o limite do campo do diario; senao vale o do .env
 const limiteSaidaSchema = z.number().int().min(0).max(100000).nullish();
@@ -143,6 +144,9 @@ export async function salvar(req: Request, res: Response) {
   }
 
   if (existente && (duplicado === "substituir" || duplicado === "juntar")) {
+    // aula que ja esta no D.E.V com o periodo fechado la: nao altera
+    const trava = await travaAula(req.usuarioId!, existente);
+    if (trava) return res.status(trava.status).json({ message: trava.message, periodoFechado: trava.status === 423 });
     // texto mudou: precisa enviar de novo ao Diario
     const doc = await RegistroAula.findByIdAndUpdate(existente._id, { ...corpo, textoFinal: fmt.texto, textoEditado: !!manual, diarioEnviadoEm: null }, { new: true });
     return res.json(doc);
@@ -167,6 +171,9 @@ export async function atualizar(req: Request, res: Response) {
   }
   const antes = await RegistroAula.findOne({ _id: req.params.id, usuario: req.usuarioId }).lean();
   if (!antes) return res.status(404).json({ message: "Registro nao encontrado" });
+  // aula que ja esta no D.E.V com o periodo fechado la: nao altera (o diario oficial ficaria diferente)
+  const trava = await travaAula(req.usuarioId!, antes);
+  if (trava) return res.status(trava.status).json({ message: trava.message, periodoFechado: trava.status === 423 });
   // texto, data ou turma mudaram: o que esta no Diario ficou desatualizado (precisa enviar de novo)
   const mudouDiario = antes.textoFinal !== fmt.texto || antes.data !== dados.data || (antes.diarioTurmaId ?? null) !== (dados.diarioTurmaId ?? null);
   const doc = await RegistroAula.findOneAndUpdate(

@@ -9,6 +9,8 @@ import { calcularNota, corrigirComFoto, ErroAtividade, gerarAtividade, limparCab
 import { comMedicao, exigirAcesso, exigirConta, exigirPlanoPago, fecharLote, SemAcesso } from "../services/uso";
 import { diario, ErroDiario } from "../services/diario";
 import { tokenDo, tratarErro } from "./diarioController";
+import { travaAtividade } from "../services/travaDiario";
+import { foraDoPeriodo, pontosDoPeriodo } from "../services/pontosPeriodo";
 
 // Ferramenta de atividades: gerar (I.A) -> editar gabarito/valores -> salvar -> corrigir (manual ou foto) -> aprovar -> lancar notas
 
@@ -35,6 +37,10 @@ const gerarSchema = z.object({
   ajuste: z.string().max(1500).nullish(), // o que mudar
   escola: z.string().max(150).nullish(), // cabecalho
   professor: z.string().max(150).nullish(),
+  // turma/materia do D.E.V (com notas): o valor tem que caber nos pontos do periodo
+  diarioTurmaId: z.string().regex(objectId).nullish(),
+  diarioMateriaId: z.string().regex(objectId).nullish(),
+  atividadeId: z.string().regex(objectId).nullish(), // atividade salva sendo refeita (nao conta duas vezes)
 });
 
 // POST /api/atividades/gerar -> atividade + gabarito (nao salva)
@@ -44,6 +50,13 @@ export async function gerar(req: Request, res: Response) {
   try {
     // ajuste tambem gasta I.A: no teste gratis conta como uma atividade (e usa o limite de I.A)
     const ehAjuste = !!(p.data.atual && p.data.ajuste?.trim());
+    // D.E.V: so gera se o valor couber nos pontos que restam no periodo (antes de gastar I.A)
+    if (!ehAjuste && p.data.diarioTurmaId && p.data.diarioMateriaId) {
+      const pts = await pontosDoPeriodo(req.usuarioId!, { turma: p.data.diarioTurmaId, periodo: p.data.periodo, materia: p.data.diarioMateriaId, excluirId: p.data.atividadeId });
+      if ("erro" in pts) return res.status(409).json({ message: pts.erro, reconectar: pts.reconectar });
+      const fora = foraDoPeriodo(pts, p.data.valorTotal, p.data.periodo);
+      if (fora) return res.status(422).json({ message: fora, semPontos: true, pontos: pts });
+    }
     await exigirAcesso(req.usuarioId!, ehAjuste ? { continuarLote: "atividade", abrirLote: "atividade", recurso: "atividade" } : { abrirLote: "atividade", recurso: "atividade" });
     // o que a I.A ja aprendeu do jeito do professor (atividades salvas e ajustes pedidos)
     const prefs = await preferenciasDoProfessor(req.usuarioId!);
@@ -101,7 +114,7 @@ const salvarSchema = z.object({
       colunas: z.boolean().default(false),
     })
     .nullish(),
-  texto: z.object({ titulo: z.string().max(200), conteudo: z.string().max(8000), imagem: z.string().max(40) }).nullish(),
+  texto: z.object({ titulo: z.string().max(200), conteudo: z.string().max(8000), imagem: z.string().max(40), posicao: z.enum(["topo", "direita", "esquerda"]).default("topo") }).nullish(),
 });
 
 // Imagens validas (so data URL de imagem) e cabecalho/estilo limpos
@@ -161,6 +174,9 @@ export async function atualizar(req: Request, res: Response) {
   if (!p.success) return res.status(400).json({ message: p.error.issues[0]?.message ?? "Dados inválidos" });
   const a = await Atividade.findOne({ _id: req.params.id, usuario: req.usuarioId });
   if (!a) return res.status(404).json({ message: "Atividade não encontrada." });
+  // notas ja no D.E.V e periodo fechado la: nao altera (gabarito/valores mudariam as notas so aqui)
+  const trava = await travaAtividade(req.usuarioId!, a as never);
+  if (trava) return res.status(trava.status).json({ message: trava.message, periodoFechado: trava.status === 423 });
   // trocar de turma depois de corrigir apagaria a ligacao com os alunos: so sem correcoes
   const mudouTurma = String(a.turmaId ?? "") !== String(p.data.turmaId ?? "") || String(a.diarioTurmaId ?? "") !== String(p.data.diarioTurmaId ?? "");
   if (mudouTurma && (await Correcao.exists({ atividade: a._id }))) {
@@ -272,6 +288,8 @@ export async function salvarCorrecao(req: Request, res: Response) {
   }
   const a = await atividadeDo(req);
   if (!a) return res.status(404).json({ message: "Atividade não encontrada." });
+  const trava = await travaAtividade(req.usuarioId!, a as never);
+  if (trava) return res.status(trava.status).json({ message: trava.message, periodoFechado: trava.status === 423 });
   const alunoId = String(req.params.alunoId).slice(0, 64);
   const atual = await Correcao.findOne({ atividade: a._id, alunoId }).lean();
   const r = calcularNota(a.questoes as unknown as Questao[], p.data.respostas as RespostaAluno[]);
@@ -297,6 +315,8 @@ export async function salvarCorrecao(req: Request, res: Response) {
 export async function removerCorrecao(req: Request, res: Response) {
   const a = await atividadeDo(req);
   if (!a) return res.status(404).json({ message: "Atividade não encontrada." });
+  const trava = await travaAtividade(req.usuarioId!, a as never);
+  if (trava) return res.status(trava.status).json({ message: trava.message, periodoFechado: trava.status === 423 });
   await Correcao.deleteOne({ atividade: a._id, alunoId: req.params.alunoId });
   res.status(204).end();
 }
@@ -321,6 +341,8 @@ export async function corrigirFoto(req: Request, res: Response) {
   if (!alunoNome) return res.status(400).json({ message: "Aluno não informado." });
   const a = await atividadeDo(req);
   if (!a) return res.status(404).json({ message: "Atividade não encontrada." });
+  const trava = await travaAtividade(req.usuarioId!, a as never);
+  if (trava) return res.status(trava.status).json({ message: trava.message, periodoFechado: trava.status === 423 });
   const chave = `correcao:${a._id}`;
   try {
     await exigirPlanoPago(req.usuarioId!);
@@ -360,6 +382,22 @@ export async function corrigirFoto(req: Request, res: Response) {
     if (e instanceof SemAcesso) return semAcesso(res, e);
     console.error("[atividades/foto]", e);
     res.status(500).json({ message: e instanceof Error ? `Não foi possível corrigir pela foto: ${e.message}` : "Erro ao corrigir pela foto" });
+  }
+}
+
+// GET /api/atividades/pontos-periodo?turma&periodo&materia&excluir -> pontos do periodo no D.E.V (+ salvas aqui)
+export async function pontosPeriodo(req: Request, res: Response) {
+  const turma = String(req.query.turma ?? "");
+  const materia = String(req.query.materia ?? "");
+  const periodo = Number(req.query.periodo);
+  const excluir = String(req.query.excluir ?? "");
+  if (!/^[a-f0-9]{24}$/i.test(turma) || !/^[a-f0-9]{24}$/i.test(materia) || !(periodo >= 1 && periodo <= 4)) return res.status(400).json({ message: "Dados inválidos" });
+  try {
+    const r = await pontosDoPeriodo(req.usuarioId!, { turma, periodo, materia, excluirId: /^[a-f0-9]{24}$/i.test(excluir) ? excluir : null });
+    if ("erro" in r) return res.status(409).json({ message: r.erro, reconectar: r.reconectar });
+    res.json(r);
+  } catch (e) {
+    return tratarErro(res, req.usuarioId!, e);
   }
 }
 
