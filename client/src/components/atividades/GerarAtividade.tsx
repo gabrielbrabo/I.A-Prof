@@ -230,8 +230,19 @@ function GerarAtividadeTela({
   const [descartar, setDescartar] = useState(false);
   const [periodosDev, setPeriodosDev] = useState<Array<{ label: string; aberto: boolean; totalPontos: number }>>([]);
   const { dev, locais, erroDev } = useTurmas(diario, anoLetivo);
-  const ehDev = turmaChave.startsWith("dev:");
-  const turmaDev = ehDev ? dev?.find((t) => `dev:${t.id}` === turmaChave) ?? null : null;
+  // turma do D.E.V so vale com o D.E.V conectado e a turma encontrada na lista; senao, tudo e digitado a mao
+  const escolheuDev = turmaChave.startsWith("dev:");
+  const turmaDev = escolheuDev && diario?.conectado ? dev?.find((t) => `dev:${t.id}` === turmaChave) ?? null : null;
+  const ehDev = !!turmaDev;
+  // turma do D.E.V guardada de antes, mas o D.E.V nao esta conectado (ou a turma nao existe mais): limpa
+  useEffect(() => {
+    if (!escolheuDev || !diario) return;
+    if (!diario.conectado || (dev && !dev.some((t) => `dev:${t.id}` === turmaChave))) {
+      setTurmaChave("");
+      setTurmaNome(null);
+      setMateriaDev("");
+    }
+  }, [escolheuDev, diario?.conectado, dev, turmaChave]); // eslint-disable-line react-hooks/exhaustive-deps
   // Educacao Infantil (D.E.V com conceitos): usa a turma e os alunos do D.E.V, mas atividade/notas ficam so no I.A Prof
   const infantilDev = !!turmaDev && turmaDev.notas === false;
   const devNotas = ehDev && !infantilDev;
