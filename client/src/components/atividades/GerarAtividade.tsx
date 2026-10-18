@@ -151,6 +151,7 @@ function GerarAtividadeTela({
   podeCorrigir = true,
   fotoLiberada = false,
   externa = false,
+  onPendente,
 }: {
   editar?: Atividade | null;
   diario: SituacaoDiario | null;
@@ -166,6 +167,7 @@ function GerarAtividadeTela({
   rascunho: RascunhoAtividade | null; // atividade nova em andamento (recarregou a pagina, trocou de aba)
   fotoLiberada?: boolean; // ler gabarito por foto (I.A): Profissional e Premium
   externa?: boolean; // abrir ja no modo "atividade feita fora" (so gabarito para corrigir)
+  onPendente?: (pendente: boolean) => void; // avisa o App que ha atividade gerada/editada e nao salva
 }) {
   const r0 = editar ? null : rascunho;
   // "ia" = gerar com I.A; "externa" = a atividade foi feita fora do I.A Prof: so o gabarito para corrigir
@@ -189,6 +191,23 @@ function GerarAtividadeTela({
   const [valorTotal, setValorTotal] = useState(() => editar?.valorTotal ?? r0?.valorTotal ?? Number(lerPref("ativ.valor", "10")));
   const [detalhes, setDetalhes] = useState(() => editar?.detalhes ?? r0?.detalhes ?? "");
   const [atividade, setAtividade] = useState<Atividade | null>(editar ?? r0?.atividade ?? null);
+  // "Nao salvo": atividade nova gerada (sem _id) ou mudancas depois de abrir/salvar
+  const assinatura = (x: Atividade | null) =>
+    x ? JSON.stringify({ t: x.titulo, i: x.instrucoes, q: x.questoes, c: x.cabecalho, e: x.estilo, x: x.texto, v: x.valorTotal, n: x.semNota, m: (x.imagens ?? []).map((im) => im.id) }) : "";
+  const salvoComo = useRef<string>(assinatura(editar ?? null));
+  const pendente = !!atividade && (!atividade._id || assinatura(atividade) !== salvoComo.current);
+  useEffect(() => {
+    onPendente?.(pendente);
+    if (!pendente) return;
+    // fechar/recarregar a aba do navegador tambem avisa
+    const aviso = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", aviso);
+    return () => window.removeEventListener("beforeunload", aviso);
+  }, [pendente]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => onPendente?.(false), []); // eslint-disable-line react-hooks/exhaustive-deps
   // Imagens do professor (logo, figuras): antes de gerar ficam aqui; depois, dentro da atividade
   const [imagensPedido, setImagensPedido] = useState<ImagemAtividade[]>(() => editar?.imagens ?? r0?.imagensPedido ?? []);
   const imgs = atividade?.imagens ?? imagensPedido;
@@ -482,6 +501,8 @@ function GerarAtividadeTela({
     try {
       const salva = await atividadesApi.salvar({ ...atividade, ...dadosBase(), valorTotal: atividade.valorTotal });
       salvaDeVez.current = true; // salva no servidor: o rascunho nao e mais necessario
+      salvoComo.current = assinatura(salva);
+      onPendente?.(false);
       await gravarRascunhoAtividade(null);
       gravarPref("ano", ano);
       gravarPref("ativ.turma", turmaChave);
@@ -864,10 +885,32 @@ function GerarAtividadeTela({
           rows={4}
           maxLength={LIMITE_DETALHES}
           className={`${campo} mt-2`}
-          placeholder="Ex.: 8 questões sobre frações, 4 de marcar X e 4 discursivas, com imagens coloridas para chamar atenção. Coloque a logo da escola no cabeçalho e letra grande."
+          placeholder={"Ex.: 8 questões sobre frações, 4 de marcar X e 4 discursivas, com imagens médias, tudo em 1 folha, letra grande.\nOu: 10 questões de interpretação de texto, sem imagem, em 2 folhas."}
           value={detalhes}
           onChange={(e) => setDetalhes(e.target.value)}
         />
+        {/* Exemplos rapidos: o professor ve o que pode pedir e toca para acrescentar ao pedido */}
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs" data-tour="ativ-exemplos">
+          <span className="text-slate-500">Você pode pedir:</span>
+          {["com imagem", "sem imagem", "1 folha", "2 folhas", "imagens pequenas", "imagens médias", "imagens grandes"].map((ex) => (
+            <button
+              key={ex}
+              type="button"
+              onClick={() =>
+                setDetalhes((d) => {
+                  if (d.toLowerCase().includes(ex)) return d;
+                  // opcoes do mesmo grupo se substituem (com/sem imagem, 1/2 folhas, tamanho das imagens)
+                  const grupo = ex.includes("imagem ") || ex.endsWith(" imagem") ? /,?\s*(com|sem) imagem/gi : ex.includes("folha") ? /,?\s*[12] folhas?/gi : /,?\s*imagens (pequenas|médias|grandes)/gi;
+                  const base = d.replace(grupo, "").trim().replace(/[.,;]+$/, "").replace(/^,\s*/, "");
+                  return (base ? `${base}, ${ex}` : ex.charAt(0).toUpperCase() + ex.slice(1)).slice(0, LIMITE_DETALHES);
+                })
+              }
+              className="rounded-full border border-slate-300 bg-white px-2.5 py-1 text-slate-600 hover:border-indigo-400 hover:text-indigo-700"
+            >
+              {ex}
+            </button>
+          ))}
+        </div>
         {/* Imagens do professor */}
         <div className="mt-2 rounded-lg border border-dashed border-slate-300 p-2.5">
           <div className="flex flex-wrap items-center gap-2">

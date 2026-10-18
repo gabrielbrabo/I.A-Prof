@@ -191,7 +191,24 @@ function Painel() {
 
   // ferramenta aberta (Plano de curso aparece em Plano de aulas e em Atividades)
   const [ferramentaPref, setFerramentaPref] = useState<string | null>(null);
+  // Atividade gerada e ainda nao salva: avisa antes de sair da tela (ou do sistema)
+  const ativPendente = useRef(false);
+  const [sairSemSalvar, setSairSemSalvar] = useState<null | (() => void)>(null);
+  const protegido = (acao: () => void) => {
+    if (aba === "atividade" && ativPendente.current) setSairSemSalvar(() => acao);
+    else acao();
+  };
   const ir = (id: Tela, ferramenta?: string) => {
+    if (id !== "atividade" && aba === "atividade" && ativPendente.current) {
+      setSairSemSalvar(() => () => {
+        ativPendente.current = false;
+        irDireto(id, ferramenta);
+      });
+      return;
+    }
+    irDireto(id, ferramenta);
+  };
+  const irDireto = (id: Tela, ferramenta?: string) => {
     if (id === "atividades" && aba === "atividades") setAtividadeCorrigir(null); // botao "Atividades e correção" volta para a lista
     setFerramentaPref((atual) => ferramenta ?? (ferramentaDa(id, atual)?.id === atual ? atual : ferramentaDa(id)?.id ?? atual));
     setAba(id);
@@ -276,7 +293,7 @@ function Painel() {
                 </button>
               )}
             </span>
-            <button onClick={sair} className="hidden shrink-0 rounded border-l border-slate-200 px-2 py-1.5 pl-3 hover:bg-slate-100 hover:text-rose-600 md:inline-block">
+            <button onClick={() => protegido(sair)} className="hidden shrink-0 rounded border-l border-slate-200 px-2 py-1.5 pl-3 hover:bg-slate-100 hover:text-rose-600 md:inline-block">
               Sair
             </button>
             {/* Como usar: a direita do Sair (computador) */}
@@ -427,7 +444,7 @@ function Painel() {
               </button>
               <InstalarApp variante="menu" onClique={() => setMenuAberto(false)} />
               <div className="mt-auto border-t border-slate-200 pt-2">
-                <button onClick={sair} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-rose-600 hover:bg-rose-50">
+                <button onClick={() => protegido(sair)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-rose-600 hover:bg-rose-50">
                   <span className="text-base">🚪</span>
                   <span className="flex-1">Sair</span>
                 </button>
@@ -610,6 +627,7 @@ function Painel() {
           <GerarAtividade
             key={atividadeEditar?._id ?? `nova-${novaAtiv}`}
             editar={atividadeEditar}
+            onPendente={(v) => (ativPendente.current = v)}
             externa={novaExterna}
             fotoLiberada={situacao?.planoId === "profissional" || situacao?.planoId === "premium"}
             diario={diario}
@@ -727,6 +745,35 @@ function Painel() {
             setVersaoPlano((v) => v + 1);
           }}
         />
+      )}
+      {sairSemSalvar && (
+        <div className="fixed inset-0 z-[75] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm" onClick={() => setSairSemSalvar(null)} role="dialog" aria-modal="true" aria-labelledby="titulo-sair-sem-salvar">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-2xl">⚠️</div>
+            <p id="titulo-sair-sem-salvar" className="text-lg font-bold text-slate-800">
+              A atividade ainda não foi salva
+            </p>
+            <p className="mt-1 text-sm text-slate-600">
+              Você ainda não aprovou o gabarito nem salvou esta atividade. Se sair agora, ela pode ser perdida e você vai precisar gerar de novo (e gastar I.A).
+            </p>
+            <div className="mt-4 grid gap-2">
+              <button onClick={() => setSairSemSalvar(null)} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">
+                Voltar e aprovar / salvar
+              </button>
+              <button
+                onClick={() => {
+                  const acao = sairSemSalvar;
+                  setSairSemSalvar(null);
+                  ativPendente.current = false;
+                  acao?.();
+                }}
+                className="rounded-lg px-4 py-2 text-sm text-rose-600 hover:bg-rose-50"
+              >
+                Sair sem salvar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {semLimite && (
         <ModalSemLimite

@@ -40,7 +40,8 @@ export type Ciclo = "mensal" | "anual";
 export const precoDoCiclo = (p: Plano, ciclo: Ciclo) => (ciclo === "anual" ? p.precoMensal * 10 : p.precoMensal); // anual = 2 meses gratis
 export const planoPorId = (id: string) => PLANOS.find((p) => p.id === id) ?? null;
 
-// Teste gratis: 30 dias, com 30 aulas e 10 atividades geradas (cada uma conta separado).
+// Teste gratis: 30 dias, com 30 aulas e 7 atividades (cada ajuste tambem conta como 1).
+// Aulas acabam com 30 aulas OU 30 dias; atividades com 7 atividades OU 30 dias (o que vier primeiro).
 // No teste e no Essencial: gerar, corrigir a mao e lancar notas; a correcao com foto (I.A) e do Profissional e Premium.
-// Orcamento: 30 aulas (~R$ 0,12 = R$ 3,60) + 10 atividades/ajustes (~R$ 0,64 = R$ 6,40) = ~R$ 10; R$ 12 da folga.
-export const TESTE = { dias: 30, aulas: 30, atividades: 10, limiteIaCentavos: 1200 };
+// Orcamento: 30 aulas (~R$ 0,12 = R$ 3,60) + 7 atividades/ajustes (~R$ 0,64 = R$ 4,48) = ~R$ 8,10; R$ 10 da folga.
+export const TESTE = { dias: 30, aulas: 30, atividades: 7, limiteIaCentavos: 1000 };
