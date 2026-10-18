@@ -218,6 +218,8 @@ function GerarAtividadeTela({
   const [perguntas, setPerguntas] = useState<string[] | null>(null);
   const [respostas, setRespostas] = useState("");
   const [ajuste, setAjuste] = useState("");
+  // ajustes pedidos nesta atividade: a I.A so aprende com eles quando o professor aprova e salva
+  const [ajustesFeitos, setAjustesFeitos] = useState<string[]>(() => r0?.ajustesFeitos ?? []);
   const [ajustando, setAjustando] = useState(false);
   const [previa, setPrevia] = useState(false); // ver a folha antes de salvar
   // o que a I.A ja aprendeu do jeito do professor
@@ -244,10 +246,10 @@ function GerarAtividadeTela({
     const t = window.setTimeout(() => {
       if (salvaDeVez.current) return;
       if (!atividade && !detalhes.trim()) return void gravarRascunhoAtividade(null);
-      void gravarRascunhoAtividade({ ano, anoLetivo, periodo, turmaChave, turmaNome, componente, materiaDev, tipoDev, valorTotal, detalhes, habSel, atividade, imagensPedido, usouPlano, origem, em: Date.now() });
+      void gravarRascunhoAtividade({ ano, anoLetivo, periodo, turmaChave, turmaNome, componente, materiaDev, tipoDev, valorTotal, detalhes, habSel, atividade, imagensPedido, usouPlano, origem, ajustesFeitos, em: Date.now() });
     }, 600);
     return () => window.clearTimeout(t);
-  }, [editar, ano, anoLetivo, periodo, turmaChave, turmaNome, componente, materiaDev, tipoDev, valorTotal, detalhes, habSel, atividade, imagensPedido, usouPlano, origem]);
+  }, [editar, ano, anoLetivo, periodo, turmaChave, turmaNome, componente, materiaDev, tipoDev, valorTotal, detalhes, habSel, atividade, imagensPedido, usouPlano, origem, ajustesFeitos]);
   const [descartar, setDescartar] = useState(false);
   const [periodosDev, setPeriodosDev] = useState<Array<{ label: string; aberto: boolean; totalPontos: number }>>([]);
   const { dev, locais, erroDev } = useTurmas(diario, anoLetivo);
@@ -398,10 +400,13 @@ function GerarAtividadeTela({
       });
       setUsouPlano(r.usouPlano);
       if (modo === "novo") {
+        setAjustesFeitos([]);
         window.scrollTo({ top: 0, behavior: "smooth" }); // resultado fica no topo
         window.dispatchEvent(new CustomEvent("iaprof:tour", { detail: "ativPronta" })); // guia da 1a atividade gerada
       }
       if (modo === "ajuste") {
+        const feito = ajuste.trim();
+        setAjustesFeitos((l) => [...l, feito].slice(-30));
         setAjuste("");
         setAviso("✓ Ajuste feito. Confira abaixo.");
       }
@@ -505,7 +510,7 @@ function GerarAtividadeTela({
     if (!atividade._id && naoCabe) return setModalPontos(pontos); // D.E.V: valor tem que caber no periodo
     setSalvando(true);
     try {
-      const salva = await atividadesApi.salvar({ ...atividade, ...dadosBase(), valorTotal: atividade.valorTotal });
+      const salva = await atividadesApi.salvar({ ...atividade, ...dadosBase(), valorTotal: atividade.valorTotal }, ajustesFeitos);
       salvaDeVez.current = true; // salva no servidor: o rascunho nao e mais necessario
       salvoComo.current = assinatura(salva);
       onPendente?.(false);
@@ -1000,7 +1005,7 @@ function GerarAtividadeTela({
             data-tour="ativ-gerar"
             className="w-full rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 sm:w-auto"
           >
-            {gerando ? "Gerando… (com imagens leva até 1 min)" : atividade ? "✨ Gerar de novo" : "✨ Gerar atividade"}
+            {gerando ? "Gerando… (com imagens leva até 1 min)" : atividade ? "✨ Gerar de novo" : "✨ Gerar atividade/avaliação"}
           </button>
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500" data-tour="ativ-aprende">
@@ -1023,7 +1028,7 @@ function GerarAtividadeTela({
               )}
             </>
           ) : (
-            <span>🧠 A I.A aprende seu jeito a cada atividade que você aprova e a cada ajuste que pede.</span>
+            <span>🧠 A I.A aprende seu jeito com as atividades que você aprova e salva (e os ajustes delas).</span>
           )}
           <span className="basis-full text-amber-700">⚡ Gerar usa I.A: consome do seu limite do mês (ou dos créditos). No teste grátis, conta como 1 atividade.</span>
         </div>

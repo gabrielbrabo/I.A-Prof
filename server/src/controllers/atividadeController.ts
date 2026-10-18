@@ -63,7 +63,6 @@ export async function gerar(req: Request, res: Response) {
     // o que a I.A ja aprendeu do jeito do professor (atividades salvas e ajustes pedidos)
     const prefs = await preferenciasDoProfessor(req.usuarioId!);
     const r = await comMedicao(req.usuarioId!, () => gerarAtividade({ ...p.data, usuario: req.usuarioId!, preferencias: prefs.texto }), { atividade: !ehAjuste, ajuste: ehAjuste });
-    if (ehAjuste && r.status === "pronta") void aprenderDoAjuste(req.usuarioId!, p.data.ajuste!);
     res.json(r);
   } catch (e) {
     if (e instanceof SemAcesso) return semAcesso(res, e);
@@ -89,6 +88,8 @@ const questaoSchema = z.object({
   figura: z.object({ tipo: z.enum(["", "emoji", "svg"]), conteudo: z.string().max(8000) }).default({ tipo: "", conteudo: "" }),
 });
 const salvarSchema = z.object({
+  // ajustes pedidos a I.A nesta atividade: so viram aprendizado quando o professor aprova e salva
+  ajustesFeitos: z.array(z.string().max(500)).max(30).optional(),
   ano: z.string().min(1),
   uf: z.string().length(2).nullish(),
   anoLetivo: z.number().int(),
@@ -171,7 +172,9 @@ export async function salvar(req: Request, res: Response) {
     }
   }
   const a = await Atividade.create({ ...p.data, ...dadosVisuais(p.data), usuario: req.usuarioId, questoes: dadosQuestoes(p.data.questoes) });
+  // aprende so com o que o professor aprovou: a atividade salva e os ajustes que levaram a ela
   void aprenderDaSalva(req.usuarioId!, { estilo: a.estilo, cabecalho: a.cabecalho, questoes: a.questoes } as never);
+  void aprenderAjustes(req.usuarioId!, p.data.ajustesFeitos);
   res.status(201).json(a);
 }
 
@@ -206,7 +209,12 @@ export async function atualizar(req: Request, res: Response) {
   a.set({ ...p.data, ...dadosVisuais(p.data), questoes: dadosQuestoes(p.data.questoes) });
   await a.save();
   await recalcularNotas(a._id, a.questoes as unknown as Questao[]);
+  void aprenderAjustes(req.usuarioId!, p.data.ajustesFeitos); // ajustes aprovados ao salvar a edicao
   res.json(a);
+}
+
+async function aprenderAjustes(usuario: string, ajustes?: string[]) {
+  for (const t of ajustes ?? []) await aprenderDoAjuste(usuario, t);
 }
 
 // GET /api/atividades -> lista com o andamento da correcao

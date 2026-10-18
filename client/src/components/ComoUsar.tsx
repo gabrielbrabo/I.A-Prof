@@ -75,13 +75,13 @@ const SECOES: Secao[] = [
   {
     id: "atividades",
     icone: "📝",
-    titulo: "Gerar atividade",
+    titulo: "Gerar atividade/avaliação",
     passos: [
-      "Em 📝 Atividades › Gerar atividade, escolha série, turma e período. Matéria: conectado ao D.E.V vem da lista do D.E.V; sem D.E.V, digite.",
+      "Em 📝 Atividades/Avaliações › Gerar atividade/avaliação, escolha série, turma e período. Matéria: conectado ao D.E.V vem da lista do D.E.V; sem D.E.V, digite.",
       "Marque as habilidades do plano de curso (do período e da matéria) que a atividade vai trabalhar. O plano é o mesmo das aulas (📝 Atividades › Plano de curso).",
       "Escreva como quer a atividade: tema, quantidade e tipos (marcar X, V ou F, discursiva, completar). Ex.: “8 questões de frações, 4 de marcar X, 2 V ou F e 2 discursivas”.",
       "Peça do seu jeito: imagens chamativas, letra grande, colorida, logo da escola no cabeçalho, sem nota… Use 🖼️ Adicionar imagens para mandar a logo ou figuras do seu computador.",
-      "Clique em ✨ Gerar atividade. A I.A segue o seu pedido em cima das habilidades marcadas. Se faltar algo (ex.: a logo), ela pergunta antes.",
+      "Clique em ✨ Gerar atividade/avaliação. A I.A segue o seu pedido em cima das habilidades marcadas. Se faltar algo (ex.: a logo), ela pergunta antes.",
       "Não ficou do jeito? Use ✏️ “Quer mudar algo? Peça à I.A” (ex.: “deixe a questão 3 mais fácil”) ou edite à mão: questões, imagens, cabeçalho e letra.",
       "Confira e edite: questões, resposta certa de cada uma e o valor. Se a soma não bater com o valor total, use “Ajustar para somar”.",
       "Clique em ✓ Aprovar e salvar. Use 🖨️ Imprimir / PDF para a folha dos alunos (sem gabarito) e 🔑 para o gabarito.",
@@ -93,7 +93,7 @@ const SECOES: Secao[] = [
     icone: "✅",
     titulo: "Corrigir e lançar notas",
     passos: [
-      "Em 📝 Atividades › Atividades e correção, clique em ✅ Corrigir na atividade.",
+      "Em 📝 Atividades/Avaliações › Atividades/avaliações e correções, clique em ✅ Corrigir na atividade.",
       "Toque no nome do aluno e escolha: 📷 Corrigir com foto (a I.A corrige pelo gabarito) ou ✍️ Corrigir à mão (não usa I.A).",
       "Confira a correção: questões em amarelo são dúvidas da I.A. Ajuste o que precisar.",
       "Clique em ✓ Aprovar e próximo. Só as correções aprovadas viram nota.",

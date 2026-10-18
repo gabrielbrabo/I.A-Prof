@@ -31,13 +31,13 @@ export const FERRAMENTAS: Ferramenta[] = [
   },
   {
     id: "atividades",
-    rotulo: "Atividades",
-    curto: "Atividades",
+    rotulo: "Atividades/Avaliações",
+    curto: "Atividades/Avaliações",
     icone: "📝",
     itens: [
-      { id: "atividade", rotulo: "Gerar atividade", curto: "Gerar", icone: "✨", tour: "aba-atividade" },
+      { id: "atividade", rotulo: "Gerar atividade/avaliação", curto: "Gerar", icone: "✨", tour: "aba-atividade" },
       { id: "plano", rotulo: "Plano de curso", curto: "Plano", icone: "📘", tour: "aba-plano-ativ" },
-      { id: "atividades", rotulo: "Atividades e correção", curto: "Correção", icone: "✅", tour: "aba-atividades" },
+      { id: "atividades", rotulo: "Atividades/avaliações e correções", curto: "Correção", icone: "✅", tour: "aba-atividades" },
       { id: "turmas", rotulo: "Turmas e alunos", curto: "Turmas", icone: "👥", tour: "aba-turmas" },
     ],
   },

@@ -175,7 +175,7 @@ export const PASSOS_INICIO: PassoTour[] = [
   },
   {
     alvo: "ferramenta-atividades",
-    titulo: "Atividades",
+    titulo: "Atividades/Avaliações",
     texto: "Gere atividades com gabarito, imprima, corrija com foto ou à mão e lance as notas (no D.E.V ou numa lista aqui).",
   },
   { alvo: "uso", titulo: "Uso do mês", texto: "Aqui você acompanha quanto já usou da I.A. O limite renova todo mês no dia da sua assinatura." },
@@ -266,14 +266,14 @@ export const PASSOS_ATIV_PRONTA: PassoTour[] = [
   { alvo: "ativ-questao", titulo: "Confira cada questão", texto: "Leia o enunciado e as alternativas. Pode trocar o tipo, mudar o texto ou apagar a questão." },
   { alvo: "ativ-gabarito", titulo: "Aprove o gabarito", texto: "Confira a resposta certa de cada questão (a marcada em verde). É por ela que os alunos são corrigidos." },
   { alvo: "ativ-valor-q", titulo: "Valor de cada questão", texto: "Ajuste quanto cada questão vale. A soma é o valor total da atividade." },
-  { alvo: "ativ-salvar", titulo: "Aprovar e salvar", texto: "Com o gabarito conferido, toque em Aprovar e salvar. A atividade vai para Atividades e correção." },
+  { alvo: "ativ-salvar", titulo: "Aprovar e salvar", texto: "Com o gabarito conferido, toque em Aprovar e salvar. A atividade vai para Atividades/avaliações e correções." },
   { alvo: "ativ-salvar-corrigir", titulo: "Ou salvar e corrigir", texto: "Se já tem as folhas dos alunos, salve e vá direto corrigir." },
 ];
 
 export const PASSOS_ATIVIDADE: PassoTour[] = [
   {
     alvo: ["ferramenta-atividades", "menu"],
-    titulo: "Atividades",
+    titulo: "Atividades/Avaliações",
     texto: "Aqui você gera atividades com gabarito, corrige (com foto ou à mão) e lança as notas.",
   },
   { alvo: "ativ-serie", titulo: "Série", texto: "Escolha a série da turma." },
@@ -311,7 +311,7 @@ export const PASSOS_ATIVIDADE: PassoTour[] = [
   },
   {
     alvo: ["aba-atividades", "menu"],
-    titulo: "Atividades e correção",
+    titulo: "Atividades/avaliações e correções",
     texto: "Suas atividades salvas ficam aqui: veja, edite, imprima ou corrija. Para corrigir, escolha a atividade, toque no aluno e corrija com foto (I.A) ou à mão. Aprove e lance as notas no D.E.V ou salve a lista aqui.",
   },
   { alvo: ["aba-turmas", "menu"], titulo: "Turmas e alunos", texto: "Suas turmas com a lista de alunos (para quem não usa o D.E.V)." },

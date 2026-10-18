@@ -1,6 +1,6 @@
 import { PerfilAtividade } from "../models/PerfilAtividade";
 
-// Aprendizado do jeito do professor: cada atividade SALVA (aprovada) e cada pedido de AJUSTE vira preferencia.
+// Aprendizado do jeito do professor: so com o que ele APROVOU — cada atividade salva e os ajustes que levaram a ela.
 // Vai para a I.A como texto curto (barato) para acertar de primeira e precisar de menos ajustes.
 
 const MAX_AJUSTES = 10;

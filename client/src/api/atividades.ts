@@ -223,8 +223,11 @@ export const atividadesApi = {
   preferencias: () => api<{ texto: string; salvas: number; ajustes: number }>("/atividades/preferencias"),
   esquecerPreferencias: () => api<{ ok: boolean }>("/atividades/preferencias", { method: "DELETE" }),
   obter: (id: string) => api<Atividade>(`/atividades/${id}`),
-  salvar: (a: Atividade) =>
-    a._id ? api<Atividade>(`/atividades/${a._id}`, { method: "PUT", body: JSON.stringify(a) }) : api<Atividade>("/atividades", { method: "POST", body: JSON.stringify(a) }),
+  // ajustesFeitos: ajustes pedidos a I.A nesta atividade (ela aprende com eles so quando o professor salva)
+  salvar: (a: Atividade, ajustesFeitos?: string[]) => {
+    const body = JSON.stringify(ajustesFeitos?.length ? { ...a, ajustesFeitos } : a);
+    return a._id ? api<Atividade>(`/atividades/${a._id}`, { method: "PUT", body }) : api<Atividade>("/atividades", { method: "POST", body });
+  },
   remover: (id: string) => api<void>(`/atividades/${id}`, { method: "DELETE" }),
   alunos: (id: string) => api<AlunosAtividade>(`/atividades/${id}/alunos`),
   pontos: (id: string) => api<{ total: number; usado: number; restante: number | null; aberto: boolean } | null>(`/atividades/${id}/pontos`),

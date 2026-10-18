@@ -20,6 +20,7 @@ export interface RascunhoAtividade {
   imagensPedido: ImagemAtividade[];
   usouPlano: boolean | null;
   origem?: "ia" | "externa";
+  ajustesFeitos?: string[]; // ajustes pedidos (aprendizado so ao salvar)
   em: number; // quando foi gravado
 }
 

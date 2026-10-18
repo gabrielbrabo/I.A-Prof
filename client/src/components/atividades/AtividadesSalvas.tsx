@@ -58,7 +58,7 @@ export default function AtividadesSalvas({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-base font-semibold text-slate-800">📝 Atividades e correção</p>
+          <p className="text-base font-semibold text-slate-800">📝 Atividades/avaliações e correções</p>
           <p className="text-sm text-slate-500">{podeCorrigir ? "Suas atividades salvas: veja, edite, imprima ou corrija e lance as notas." : "Suas atividades salvas para ver, editar e imprimir."}</p>
         </div>
         <div className="flex flex-wrap gap-2">
