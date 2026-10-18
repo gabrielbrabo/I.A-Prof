@@ -126,6 +126,8 @@ export function SeletorTurma({
 type PropsGerar = Parameters<typeof GerarAtividadeTela>[0];
 
 // Atividade nova: antes de abrir, busca o rascunho (atividade gerada e ainda nao salva) para nao gerar de novo
+const OUTRA = "__outra__"; // opcao "Outra materia (digitar)"
+
 export default function GerarAtividade(props: Omit<PropsGerar, "rascunho">) {
   const [rascunho, setRascunho] = useState<RascunhoAtividade | null | undefined>(props.editar ? null : undefined);
   useEffect(() => {
@@ -291,6 +293,10 @@ function GerarAtividadeTela({
   const itensPeriodo = (plano?.periodos.find((x) => x.numero === periodo)?.itens ?? []).filter((i) => i.codigo && i.habilidade);
   // materias do plano no periodo (sugestoes quando o professor digita)
   const materiasPlano = [...new Set(itensPeriodo.map((i) => i.componente))];
+  // sem D.E.V: com periodo e plano de curso, a materia vem da lista do plano ("Outra" deixa digitar)
+  const [materiaOutra, setMateriaOutra] = useState(false);
+  const materiaDoPlano = materiasPlano.find((c) => mesmoComponente(c, componente)) ?? "";
+  const listaMaterias = periodo > 0 && materiasPlano.length > 0 && !materiaOutra && (!componente.trim() || !!materiaDoPlano);
   // habilidades do periodo + materia: o professor escolhe quais a atividade vai ter
   const habilidadesDisp = componente.trim() ? itensPeriodo.filter((i) => mesmoComponente(i.componente, componente)) : [];
   const codigosDisp = habilidadesDisp.map((h) => h.codigo!);
@@ -683,8 +689,8 @@ function GerarAtividadeTela({
           <label className="text-xs font-medium text-slate-500">Ano letivo</label>
           <input type="number" className={campo} value={anoLetivo} onChange={(e) => setAnoLetivo(Number(e.target.value) || new Date().getFullYear())} />
         </div>
-        <div className={`min-w-0 ${mais || exigeDev || periodo > 0 ? "" : "hidden"}`}>
-          <label className="text-xs font-medium text-slate-500">Período{exigeDev ? " *" : ""}</label>
+        <div className="min-w-0">
+          <label className="text-xs font-medium text-slate-500">Período{exigeDev ? " *" : " (opcional)"}</label>
           <select data-tour="ativ-periodo" className={`${campo} ${exigeDev && !periodo ? "border-amber-400 bg-amber-50" : ""}`} value={periodo} onChange={(e) => setPeriodo(Number(e.target.value))}>
             <option value={0}>{carregandoPlano ? "Carregando…" : exigeDev ? "Selecione…" : "Sem período"}</option>
             {Array.from({ length: qtdPeriodos }, (_, i) => i + 1).map((n) => (
@@ -712,21 +718,48 @@ function GerarAtividadeTela({
                 </option>
               ))}
             </select>
+          ) : listaMaterias ? (
+            // periodo escolhido e plano de curso com materias: escolhe da lista (e depois as habilidades)
+            <select
+              className={campo}
+              value={materiaDoPlano ? materiaDoPlano : componente.trim() ? OUTRA : ""}
+              onChange={(e) => {
+                if (e.target.value === OUTRA) {
+                  setMateriaOutra(true);
+                  setComponente("");
+                } else setComponente(e.target.value);
+                setHabSel([]);
+              }}
+            >
+              <option value="">Selecione a matéria do plano de curso…</option>
+              {materiasPlano.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+              <option value={OUTRA}>Outra matéria (digitar)</option>
+            </select>
           ) : (
-            <>
+            <div className="flex gap-2">
               <input
-                list="materias-plano"
                 className={campo}
                 value={componente}
                 placeholder="Digite a matéria (ex.: Matemática)"
                 onChange={(e) => setComponente(e.target.value)}
               />
-              <datalist id="materias-plano">
-                {materiasPlano.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
-            </>
+              {materiaOutra && materiasPlano.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMateriaOutra(false);
+                    setComponente("");
+                  }}
+                  className="mt-1 shrink-0 rounded-lg px-2 text-xs font-medium text-indigo-600 hover:bg-indigo-50"
+                >
+                  Ver lista
+                </button>
+              )}
+            </div>
           )}
         </div>
         {exigeDev && (
@@ -780,7 +813,7 @@ function GerarAtividadeTela({
       </div>
       {!editar && (
         <button type="button" onClick={() => setMais((m) => !m)} className="-mt-2 text-xs font-medium text-indigo-600 hover:underline" data-tour="ativ-mais">
-          {mais ? "▲ Menos opções" : "⚙️ Mais opções (turma, período, habilidades do plano)"}
+          {mais ? "▲ Menos opções" : "⚙️ Mais opções (turma, ano letivo)"}
         </button>
       )}
 
@@ -820,7 +853,7 @@ function GerarAtividadeTela({
       {!ehExterna && (
         <>
       {/* Habilidades do plano de curso (periodo + materia) */}
-      <div className={`rounded-xl border border-slate-200 bg-white p-3 sm:p-4 ${(mais || exigeDev || habSel.length > 0) && periodo > 0 ? "" : "hidden"}`} data-tour="ativ-habilidades">
+      <div className={`rounded-xl border border-slate-200 bg-white p-3 sm:p-4 ${periodo > 0 ? "" : "hidden"}`} data-tour="ativ-habilidades">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-semibold text-slate-700">
             Habilidades da atividade {habilidadesDisp.length > 0 && <span className="text-rose-600">*</span>}
