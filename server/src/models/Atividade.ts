@@ -18,6 +18,7 @@ const questaoSchema = new Schema({
   valor: { type: Number, default: 1, min: 0 },
   imagem: { type: String, default: "" }, // id de uma imagem do professor (lista "imagens")
   linhas: { type: Number, default: 0 }, // linhas para resposta (0 = automatico)
+  quadro: { type: String, default: "" }, // caca-palavras, colunas para ligar, tabela (largura fixa)
   figura: {
     tipo: { type: String, enum: ["", "emoji", "svg"], default: "" }, // ilustracao feita pela I.A
     conteudo: { type: String, default: "" },
@@ -30,7 +31,7 @@ const atividadeSchema = new Schema(
     ano: { type: String, required: true }, // serie
     uf: { type: String, default: null },
     anoLetivo: { type: Number, required: true },
-    periodo: { type: Number, required: true }, // 1..4
+    periodo: { type: Number, default: 0 }, // 1..4 (0 = sem periodo)
     componente: { type: String, required: true },
     turma: { type: String, default: null }, // nome exibido
     turmaId: { type: Schema.Types.ObjectId, ref: "Turma", default: null }, // turma do I.A Prof
@@ -38,7 +39,8 @@ const atividadeSchema = new Schema(
     diarioMateriaId: { type: String, default: null }, // materia do D.E.V
     tipoDev: { type: String, enum: ["Normal", "Prova", "Trabalho", "Outra Atividade"], default: "Normal" },
     detalhes: { type: String, default: "" }, // o que o professor pediu
-    origem: { type: String, enum: ["ia", "externa"], default: "ia" }, // externa = atividade feita fora (so gabarito para corrigir)
+    origem: { type: String, enum: ["ia", "externa"], default: "ia" },
+    semNota: { type: Boolean, default: false }, // so exercicio: sem nota (correcao conta acertos; nao vai para o D.E.V) // externa = atividade feita fora (so gabarito para corrigir)
     titulo: { type: String, required: true },
     instrucoes: { type: String, default: "" },
     questoes: { type: [questaoSchema], default: [] },
@@ -58,6 +60,7 @@ const atividadeSchema = new Schema(
       layout: { type: String, enum: ["compacto", "normal", "amplo"], default: "normal" },
       imagem: { type: String, enum: ["pequena", "media", "grande"], default: "media" },
       colunas: { type: Boolean, default: false },
+      paginas: { type: Number, default: 0 }, // 1 = tudo em uma folha
     },
     // Texto de apoio (leitura e interpretacao)
     texto: {

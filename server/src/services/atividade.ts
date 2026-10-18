@@ -23,6 +23,7 @@ export interface Questao {
   criterios: string;
   valor: number;
   linhas?: number; // linhas para resposta (discursiva/completar); 0 = automatico
+  quadro?: string; // bloco de largura fixa: grade de caca-palavras, colunas para ligar, tabela, sequencia
   imagem?: string; // id de uma imagem (enviada pelo professor ou gerada pela I.A de imagem)
   figura?: Figura; // ilustracao simples feita pela I.A (emoji ou desenho SVG)
 }
@@ -69,6 +70,7 @@ export interface Estilo {
   layout: "compacto" | "normal" | "amplo"; // aproveitamento da folha
   imagem: "pequena" | "media" | "grande"; // tamanho das imagens
   colunas: boolean; // alternativas curtas em 2 colunas (economiza espaco)
+  paginas: 0 | 1 | 2; // 1 = tudo em uma folha (a impressao encolhe ate caber); 0 = livre
 }
 export const CAMPOS_CABECALHO = ["escola", "professor", "turma", "aluno", "data", "nota", "serie", "periodo"];
 // serie e periodo so aparecem se o professor pedir/marcar
@@ -141,16 +143,30 @@ export function calcularNota(questoes: Questao[], respostas: RespostaAluno[]) {
 const SYSTEM_GERAR = `Você é um professor experiente da educação básica brasileira e cria atividades para os alunos.
 Crie a atividade pedida pelo professor, adequada à série, com linguagem clara para os alunos e o gabarito para o professor.
 
+REGRA DE OURO: o PEDIDO DO PROFESSOR é a ordem principal e vem antes de qualquer outra regra abaixo. Faça EXATAMENTE o que ele pediu — tema, quantidade, tipos de questão, nível, tamanho, visual, cabeçalho, imagens, número de folhas — como um professor caprichoso faria no Word. Se uma regra abaixo conflitar com o pedido, vale o pedido. Leia o pedido duas vezes antes de começar e confira de novo no fim.
+
 Tipos de questão:
 - "multipla": enunciado + 3 a 5 alternativas (sem letras no texto da alternativa) + "resposta" = letra correta ("A", "B"...).
 - "vf": enunciado (ex.: "Marque V para verdadeiro e F para falso") + "itens" com 3 a 6 afirmações, cada uma com "resposta" "V" ou "F".
 - "discursiva": pergunta aberta + "resposta" = resposta esperada + "criterios" = como dar nota (o que vale total, o que vale metade).
 - "completar": frase(s) com lacunas "____" ou perguntas de resposta curta + "resposta" = respostas esperadas na ordem.
+- "quadro" (qualquer tipo, opcional): bloco de texto em largura fixa que aparece logo abaixo do enunciado, para o que precisa ficar alinhado — colunas para ligar, tabela, sequência numérica, quadro de cálculo. Use linhas e espaços para alinhar. Sem quadro: "".
+
+TIPOS DE ATIVIDADE (faça o que o professor pedir, do jeito certo de cada um):
+- Produção de texto / redação: "discursiva" com proposta clara (gênero, tema, situação, para quem escreve, tamanho), dicas curtas de como fazer, "linhas" 15–25 (crianças pequenas 8–12) e "criterios" com a rubrica (adequação ao tema e ao gênero, organização, ortografia, pontuação). Pode ter imagem de estímulo.
+- Leitura e interpretação: texto de apoio original + questões variadas sobre ele.
+- Ditado: "completar" com instrução e "linhas" = quantidade de palavras/frases; as palavras do ditado vão em "resposta" (gabarito do professor), NUNCA no enunciado.
+- Caça-palavras: "completar" com enunciado ("Encontre no caça-palavras as palavras…") e "quadro" = "CAÇA-PALAVRAS: PALAVRA1, PALAVRA2, …" (só a lista; o sistema monta a grade). Liste as palavras também no enunciado se o professor quiser.
+- Ligar colunas: "completar" com "quadro" em duas colunas alinhadas (Coluna A numerada 1, 2, 3…; Coluna B com ( ) antes de cada item, em outra ordem) e "resposta" com os pares (ex.: "1-c, 2-a, 3-b").
+- Cruzadinha: "completar" com dicas numeradas e espaços ____ com a quantidade de letras (não desenhe a grade).
+- Problemas de matemática / situações-problema: "discursiva" com dados claros, "linhas" para o cálculo e resposta; contas armadas/tabuada no "quadro" quando ajudar.
+- Avaliação / prova: cabeçalho completo, mistura de tipos, progressão de dificuldade, valores somando o total.
+- Exercício de fixação / tarefa de casa: questões objetivas e curtas, sem nota se pedirem.
 
 Regras:
 - Siga o que o professor pediu (tipos, quantidade, tema). Se não disser a quantidade, faça de 5 a 8 questões.
 - Quando o professor escolher habilidades, TODAS as questões devem trabalhar essas habilidades (distribua as questões entre elas). Em "habilidades" devolva os códigos usados.
-- Distribua o "valor" das questões para somar exatamente o valor total informado (use no máximo 1 casa decimal; discursivas costumam valer mais).
+- Distribua o "valor" das questões para somar exatamente o valor total informado (use no máximo 1 casa decimal; discursivas costumam valer mais). Se a atividade for SEM NOTA: "valor" = 1 em todas as questões e tire "nota" de "cabecalho.campos".
 - Campos que não se aplicam ao tipo ficam vazios ("" ou []).
 - Não coloque a resposta no enunciado.
 - "instrucoes": uma linha para o aluno (ex.: "Leia com atenção e responda.").
@@ -166,6 +182,8 @@ Cabeçalho: use os dados informados (escola, professor, turma, série) e deixe l
 Fonte/legibilidade: "fonte nítida/adequada à idade" ou alunos pequenos → "estilo.fonte" "grande" (2º–3º ano) ou "extra" (educação infantil e 1º ano) e frases curtas. "estilo.caixaAlta": true para educação infantil e 1º ano (letra bastão) ou se o professor pedir letra de forma maiúscula.
 
 Qualidade (como uma professora experiente faria): questões bem escritas, criativas e contextualizadas no mundo da criança, enunciados curtos e claros, comandos variados (marque, circule, complete, ligue com palavras, escreva, desenhe), distratores plausíveis nas alternativas, progressão do mais fácil ao mais difícil, nada repetitivo, português correto. Revise antes de devolver.
+
+Número de folhas: "estilo.paginas" = 1 quando o professor pedir "uma folha só", "uma página", "caber numa folha", "tudo em uma folha" (2 para "duas folhas"; 0 = livre). Com 1 folha: textos e enunciados CURTOS, poucas linhas de resposta (discursiva 2, completar 1), alternativas curtas em 2 colunas, imagens pequenas, "layout" "compacto" e a quantidade de questões que cabe (se o professor disse a quantidade, mantenha e encurte tudo).
 
 Aproveitamento da folha: "estilo.layout" = "compacto" (menos espaço em branco, imagem ao lado da questão — use quando pedirem para economizar papel/usar melhor o espaço), "normal" ou "amplo" (mais espaço, bom para os pequenos). "estilo.imagem" = "pequena" | "media" | "grande". "estilo.colunas": true para colocar alternativas curtas em 2 colunas. "linhas" de cada questão = quantas linhas para a resposta (discursiva 3–6, completar 1–2; 0 = automático).
 
@@ -227,6 +245,7 @@ const SCHEMA_ATIVIDADE = {
           imagem: { type: "string" },
           ilustracao: { type: "string" },
           linhas: { type: "integer" },
+          quadro: { type: "string" },
           figura: {
             type: "object",
             properties: { tipo: { type: "string", enum: ["", "emoji", "svg"] }, conteudo: { type: "string" } },
@@ -234,7 +253,7 @@ const SCHEMA_ATIVIDADE = {
             additionalProperties: false,
           },
         },
-        required: ["tipo", "enunciado", "alternativas", "itens", "resposta", "criterios", "valor", "imagem", "ilustracao", "linhas", "figura"],
+        required: ["tipo", "enunciado", "alternativas", "itens", "resposta", "criterios", "valor", "imagem", "ilustracao", "linhas", "quadro", "figura"],
         additionalProperties: false,
       },
     },
@@ -266,8 +285,9 @@ const SCHEMA_ATIVIDADE = {
         layout: { type: "string", enum: ["compacto", "normal", "amplo"] },
         imagem: { type: "string", enum: ["pequena", "media", "grande"] },
         colunas: { type: "boolean" },
+        paginas: { type: "integer", enum: [0, 1, 2] },
       },
-      required: ["fonte", "colorido", "caixaAlta", "layout", "imagem", "colunas"],
+      required: ["fonte", "colorido", "caixaAlta", "layout", "imagem", "colunas", "paginas"],
       additionalProperties: false,
     },
   },
@@ -292,6 +312,90 @@ export interface ImagemProfessor {
   dataUrl: string; // miniatura (para a I.A ver o que e)
 }
 
+// Quadro (largura fixa): so texto, sem tags; mantem espacos e quebras de linha
+function limparQuadro(s: unknown): string {
+  return String(s ?? "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((l) => l.replace(/\s+$/, "").slice(0, 80))
+    .slice(0, 30)
+    .join("\n")
+    .replace(/^\n+|\n+$/g, "");
+}
+
+// Caca-palavras montado pelo sistema (a I.A erra a grade): palavras na horizontal e na vertical, sem acento
+const semAcento = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z]/g, "");
+export function montarCacaPalavras(palavras: string[], semente = Date.now()): { grade: string; colocadas: string[] } | null {
+  const ws = [...new Set(palavras.map(semAcento).filter((w) => w.length >= 2 && w.length <= 14))].slice(0, 15);
+  if (ws.length < 2) return null;
+  const n = Math.min(15, Math.max(10, Math.max(...ws.map((w) => w.length)) + 2));
+  let s = semente % 2147483647 || 1;
+  const rnd = () => ((s = (s * 48271) % 2147483647) / 2147483647);
+  for (let tentativa = 0; tentativa < 40; tentativa++) {
+    const g: string[][] = Array.from({ length: n }, () => Array(n).fill(""));
+    const colocadas: string[] = [];
+    for (const w of [...ws].sort((a, b) => b.length - a.length)) {
+      let ok = false;
+      for (let k = 0; k < 200 && !ok; k++) {
+        const hor = rnd() < 0.5;
+        const r = Math.floor(rnd() * (hor ? n : n - w.length + 1));
+        const c = Math.floor(rnd() * (hor ? n - w.length + 1 : n));
+        if ([...w].every((ch, i) => { const x = g[hor ? r : r + i][hor ? c + i : c]; return x === "" || x === ch; })) {
+          [...w].forEach((ch, i) => (g[hor ? r : r + i][hor ? c + i : c] = ch));
+          colocadas.push(w);
+          ok = true;
+        }
+      }
+    }
+    if (colocadas.length === ws.length) {
+      const A = "ABCDEFGHIJLMNOPRSTUV";
+      const grade = g.map((linha) => linha.map((x) => x || A[Math.floor(rnd() * A.length)]).join(" ")).join("\n");
+      return { grade, colocadas };
+    }
+  }
+  return null;
+}
+
+// Revisor: compara o pedido do professor com a atividade feita e lista o que faltou (lista vazia = atendeu)
+const SCHEMA_REVISAO = {
+  type: "object",
+  properties: { faltando: { type: "array", items: { type: "string" } } },
+  required: ["faltando"],
+  additionalProperties: false,
+};
+async function revisarPedido(p: { pedido: string; ajuste?: string | null; respostas?: string | null; atividade: unknown }): Promise<string[]> {
+  try {
+    const a = p.atividade as { questoes?: Array<Record<string, unknown>> } & Record<string, unknown>;
+    // resumo sem desenhos (mais barato): o que importa e o conteudo, tipos, quantidade e o visual escolhido
+    const resumo = {
+      titulo: a.titulo,
+      texto: a.texto,
+      cabecalho: a.cabecalho,
+      estilo: a.estilo,
+      questoes: (a.questoes ?? []).map((q) => ({ tipo: q.tipo, enunciado: q.enunciado, alternativas: q.alternativas, itens: q.itens, resposta: q.resposta, linhas: q.linhas, quadro: q.quadro, temImagem: !!(q.ilustracao || q.imagem) })),
+    };
+    const r = await chamarJsonOpenAI<{ faltando: string[] }>({
+      system:
+        "Você revisa atividades escolares. Compare o PEDIDO do professor com a ATIVIDADE pronta e liste, em frases curtas, SÓ o que o pedido exigiu e não foi feito (quantidade, tipos de questão, tema, nível, texto de apoio, imagens, cabeçalho, número de folhas/espaço, letra, cores, gabarito errado). Não invente exigências que o professor não fez e não opine sobre gosto. Se atendeu tudo, devolva a lista vazia.",
+      partes: [
+        {
+          type: "input_text",
+          text: `PEDIDO DO PROFESSOR:\n"""${p.pedido}"""${p.respostas?.trim() ? `\nRESPOSTAS DO PROFESSOR:\n"""${p.respostas}"""` : ""}${p.ajuste?.trim() ? `\nAJUSTE PEDIDO AGORA:\n"""${p.ajuste}"""` : ""}\n\nATIVIDADE PRONTA (JSON):\n${JSON.stringify(resumo).slice(0, 15000)}`,
+        },
+      ],
+      nome: "revisar_pedido",
+      schema: SCHEMA_REVISAO,
+      maxTokens: 6000,
+      raciocinio: "low",
+    });
+    return (r.faltando ?? []).map((x) => String(x).trim()).filter(Boolean).slice(0, 8);
+  } catch (e) {
+    console.error("[atividade/revisao]", e instanceof Error ? e.message : e);
+    return []; // revisao nunca impede entregar a atividade
+  }
+}
+
 export async function gerarAtividade(p: {
   usuario: string;
   ano: string;
@@ -309,10 +413,12 @@ export async function gerarAtividade(p: {
   escola?: string | null; // para o cabecalho
   professor?: string | null;
   preferencias?: string; // o que a I.A aprendeu do professor
+  semNota?: boolean; // atividade sem nota (so exercicio)
 }) {
   // Habilidades do plano de curso do periodo, do mesmo componente
   let habilidadesPlano: Array<{ codigo: string; habilidade: string }> = [];
   try {
+    if (!p.periodo || !p.componente.trim()) throw new Error("sem periodo/materia"); // sem periodo: so o pedido
     const ctx = await periodoDoPlano(p.usuario, p.ano, p.anoLetivo, p.periodo, p.turma);
     habilidadesPlano = ctx.itens
       .filter((i) => mesmoComponente(i.componente, p.componente))
@@ -324,10 +430,9 @@ export async function gerarAtividade(p: {
   const pedidas = new Set((p.habilidades ?? []).map((c) => c.toUpperCase()));
   const escolhidas = habilidadesPlano.filter((h) => pedidas.has(h.codigo.toUpperCase()));
   if (pedidas.size && !escolhidas.length) throw new ErroAtividade("As habilidades escolhidas não estão no plano de curso deste período e matéria.");
-  if (!pedidas.size && habilidadesPlano.length) throw new ErroAtividade("Escolha pelo menos uma habilidade do plano de curso para a atividade.");
   const lista = escolhidas.length
     ? `A atividade DEVE trabalhar estas habilidades (escolhidas pelo professor):\n${escolhidas.map((h) => `(${h.codigo}) ${h.habilidade}`).join("\n")}`
-    : "(sem plano de curso cadastrado para este período e matéria — use só o pedido do professor)";
+    : "(sem habilidades escolhidas — use só o pedido do professor)";
 
   // Imagens do professor: a I.A ve as miniaturas para saber o que cada uma e (logo, figura...)
   const imagens = (p.imagens ?? []).slice(0, 20);
@@ -339,17 +444,18 @@ export async function gerarAtividade(p: {
   }
   const ids = imagens.map((i) => i.id);
   const partes = [
-    `Série: ${nomeAno(p.ano)}\nComponente: ${p.componente}\nPeríodo: ${p.periodo}º\nValor total da atividade: ${p.valorTotal}\nTurma: ${p.turma || "-"}\nEscola: ${p.escola || "-"}\nProfessor(a): ${p.professor || "-"}\nGerar imagens de verdade: ${imagensLigadas() ? "sim (use \"ilustracao\")" : "não disponível (use só \"figura\" com desenho SVG, se ele pedir imagens)"}`,
+    `PEDIDO DO PROFESSOR (cumpra à risca, item por item):\n"""${p.detalhes}"""`,
+    `Série: ${nomeAno(p.ano)}\nComponente: ${p.componente || "(não informado — deduza do pedido)"}\nPeríodo: ${p.periodo ? `${p.periodo}º` : "-"}\n${p.semNota ? "Atividade SEM NOTA (valor 1 em cada questão, sem \"nota\" no cabeçalho)" : `Valor total da atividade: ${p.valorTotal}`}\nTurma: ${p.turma || "-"}\nEscola: ${p.escola || "-"}\nProfessor(a): ${p.professor || "-"}\nGerar imagens de verdade: ${imagensLigadas() ? "sim (use \"ilustracao\")" : "não disponível (use só \"figura\" com desenho SVG, se ele pedir imagens)"}`,
     lista,
     `Imagens do professor: ${imagens.length ? imagens.map((i) => `"${i.id}" (${i.nome})`).join(", ") : "nenhuma enviada"}`,
     ...(p.preferencias ? [p.preferencias] : []),
-    `Pedido do professor:\n"""${p.detalhes}"""`,
   ];
   if (p.respostas?.trim()) partes.push(`Respostas do professor às suas perguntas:\n"""${p.respostas.trim()}"""`);
   if (p.atual && p.ajuste?.trim()) {
     partes.push(`Atividade atual (JSON):\n${JSON.stringify(p.atual).slice(0, 20000)}`);
-    partes.push(`Pedido de ajuste do professor:\n"""${p.ajuste.trim()}"""`);
+    partes.push(`Pedido de ajuste do professor (aplique TUDO, de forma visível):\n"""${p.ajuste.trim()}"""`);
   }
+  partes.push(`LEMBRE: a atividade tem que atender exatamente ao pedido do professor${p.ajuste?.trim() ? " e ao ajuste" : ""}. Confira cada item antes de devolver.`);
   blocos.push({ type: "input_text", text: partes.join("\n\n") });
 
   type QuestaoIA = Questao & { ilustracao?: string };
@@ -380,6 +486,16 @@ export async function gerarAtividade(p: {
     r = await chamar(`ATENÇÃO: você devolveu ${r.questoes?.length ?? 0} questões, mas o professor pediu EXATAMENTE ${pedidoN}. Refaça com ${pedidoN} questões, seguindo todo o pedido.`);
   }
 
+  // Revisao (como um segundo professor conferindo): o que o pedido exigia e nao foi feito? Se faltar algo, refaz uma vez.
+  if (r.status !== "perguntas") {
+    const falta = await revisarPedido({ pedido: p.detalhes, ajuste: p.ajuste, respostas: p.respostas, atividade: r });
+    if (falta.length) {
+      r = await chamar(
+        `REVISÃO: a atividade que você fez NÃO atendeu a estes pontos do pedido do professor:\n${falta.map((f) => `- ${f}`).join("\n")}\nRefaça a atividade inteira corrigindo TODOS esses pontos e mantendo o que já estava certo.`
+      );
+    }
+  }
+
   const perguntas = (r.perguntas || []).map((x) => String(x).trim()).filter(Boolean).slice(0, 5);
   if (r.status === "perguntas" && perguntas.length) return { status: "perguntas" as const, perguntas };
 
@@ -405,6 +521,16 @@ export async function gerarAtividade(p: {
     return l;
   });
   if (!questoes.length) throw new ErroAtividade("A I.A não conseguiu montar a atividade. Dê mais detalhes do que você quer.");
+  // Caca-palavras: o sistema monta a grade de verdade com as palavras pedidas
+  questoes.forEach((q) => {
+    const m = /^\s*CA[CÇ]A[- ]PALAVRAS\s*:\s*(.+)$/is.exec(q.quadro ?? "");
+    if (!m) return;
+    const palavras = m[1].split(/[,;\n]+/).map((w) => w.trim()).filter(Boolean);
+    const cp = montarCacaPalavras(palavras);
+    if (!cp) return;
+    q.quadro = cp.grade;
+    if (!q.resposta.trim()) q.resposta = cp.colocadas.join(", ");
+  });
 
   // Imagens de verdade (I.A de imagem) para o texto e as questoes que pediram ilustracao
   const imagensIA: Array<{ id: string; nome: string; dataUrl: string }> = [];
@@ -443,7 +569,8 @@ export async function gerarAtividade(p: {
     titulo: semEmoji(textoPuro(r.titulo || "Atividade")) || "Atividade",
     instrucoes: semEmoji(textoPuro(r.instrucoes || "")),
     texto,
-    questoes: ajustarValores(questoes, p.valorTotal),
+    questoes: p.semNota ? questoes.map((q) => ({ ...q, valor: 1 })) : ajustarValores(questoes, p.valorTotal),
+    semNota: !!p.semNota,
     habilidades: escolhidas,
     usouPlano: escolhidas.length > 0,
     cabecalho: limparCabecalho({ ...r.cabecalho, escola: r.cabecalho?.escola || p.escola || "" }, ids),
@@ -471,7 +598,9 @@ const ORDEM_FONTE = { normal: 0, grande: 1, extra: 2 } as const;
 export function limparEstilo(e: Partial<Estilo> | null | undefined, ano?: string | null): Estilo {
   let fonte: Estilo["fonte"] = e?.fonte === "grande" || e?.fonte === "extra" ? e.fonte : "normal";
   const min = fonteMinima(ano);
-  if (ano !== undefined && ORDEM_FONTE[min] > ORDEM_FONTE[fonte]) fonte = min;
+  const paginas = (e?.paginas === 1 || e?.paginas === 2 ? e.paginas : 0) as Estilo["paginas"];
+  // letra minima pela idade, a menos que o professor queira caber em poucas folhas
+  if (ano !== undefined && !paginas && ORDEM_FONTE[min] > ORDEM_FONTE[fonte]) fonte = min;
   return {
     fonte,
     colorido: !!e?.colorido,
@@ -479,6 +608,7 @@ export function limparEstilo(e: Partial<Estilo> | null | undefined, ano?: string
     layout: e?.layout === "compacto" || e?.layout === "amplo" ? e.layout : "normal",
     imagem: e?.imagem === "pequena" || e?.imagem === "grande" ? e.imagem : "media",
     colunas: !!e?.colunas,
+    paginas,
   };
 }
 export function limparTexto(t: Partial<TextoBase> | null | undefined, ids: string[]): TextoBase {
@@ -524,7 +654,8 @@ export function limparQuestao(q: Partial<Questao>): Questao {
     valor: Math.max(0, Math.round((Number(q.valor) || 0) * 100) / 100),
     imagem: String(q.imagem ?? "").slice(0, 40),
     figura: limparFigura(q.figura),
-    linhas: Math.max(0, Math.min(15, Math.round(Number(q.linhas) || 0))),
+    linhas: Math.max(0, Math.min(30, Math.round(Number(q.linhas) || 0))),
+    quadro: limparQuadro(q.quadro),
   };
 }
 

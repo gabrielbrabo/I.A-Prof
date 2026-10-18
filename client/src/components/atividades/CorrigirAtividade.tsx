@@ -44,6 +44,9 @@ export default function CorrigirAtividade({
   const [resultado, setResultado] = useState<string | null>(null);
   const [pontos, setPontos] = useState<{ total: number; usado: number; restante: number | null; aberto: boolean } | null>(null);
   const [filtro, setFiltro] = useState<"todos" | "pendentes" | "corrigidas" | "aprovadas">("todos");
+  const [perguntarDev, setPerguntarDev] = useState(false); // fim da correcao: lancar no D.E.V?
+  const [novoAluno, setNovoAluno] = useState("");
+  const [adicionando, setAdicionando] = useState(false);
   const painel = useRef<HTMLDivElement>(null);
 
   const carregar = () =>
@@ -77,7 +80,8 @@ export default function CorrigirAtividade({
   const alunoSel = alunos.find((a) => a.id === sel) ?? null;
   // turma do D.E.V que recebe notas (Educacao Infantil usa conceitos: notas ficam so no I.A Prof)
   const infantilDev = dados?.fonte === "dev" && dados.dev?.notas === false;
-  const ehDev = dados?.fonte === "dev" && !infantilDev;
+  // atividade SEM NOTA fica so no I.A Prof (lista de acertos)
+  const ehDev = dados?.fonte === "dev" && !infantilDev && !atividade.semNota;
   const valorDev = atividade.questoes.reduce((s, q) => s + (Number(q.valor) || 0), 0);
   const passaTeto = ehDev && pontos?.restante != null && valorDev > pontos.restante + 1e-9;
 
@@ -92,6 +96,26 @@ export default function CorrigirAtividade({
     const i = alunos.findIndex((a) => a.id === depoisDe);
     const resto = [...alunos.slice(i + 1), ...alunos.slice(0, i)];
     return resto.find((a) => porAluno.get(a.id)?.status !== "aprovada" && a.id !== depoisDe)?.id ?? null;
+  }
+
+  // Quem nao usa o D.E.V: vai cadastrando os alunos enquanto corrige
+  async function adicionarAluno() {
+    const nome = novoAluno.trim();
+    if (nome.length < 2) return;
+    setAdicionando(true);
+    setErro(null);
+    try {
+      const r = await atividadesApi.adicionarAluno(atividade._id!, nome);
+      setNovoAluno("");
+      const d = await atividadesApi.alunos(atividade._id!);
+      setDados(d);
+      atividadesApi.obter(atividade._id!).then(setAtividade).catch(() => {});
+      abrir(r.aluno.id);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Erro ao adicionar o aluno");
+    } finally {
+      setAdicionando(false);
+    }
   }
 
   async function escolherMateria(id: string) {
@@ -137,7 +161,8 @@ export default function CorrigirAtividade({
           </button>
           <p className="text-base font-semibold text-slate-800">{atividade.titulo}</p>
           <p className="text-xs text-slate-500">
-            {atividade.componente} · {atividade.turma || "—"} · {atividade.periodo}º período · vale {fmtNum(atividade.valorTotal)}
+            {[atividade.componente, atividade.turma || "", atividade.periodo ? `${atividade.periodo}º período` : ""].filter(Boolean).join(" · ")}
+            {atividade.semNota ? " · sem nota (conta acertos)" : ` · vale ${fmtNum(atividade.valorTotal)}`}
             {ehDev ? " · 📒 turma do D.E.V" : infantilDev ? " · 📒 turma do D.E.V (Infantil)" : ""}
           </p>
         </div>
@@ -154,6 +179,26 @@ export default function CorrigirAtividade({
               Conectar ao D.E.V
             </button>
           )}
+        </div>
+      )}
+
+      {/* Sem D.E.V: cadastra o aluno e ja corrige (um por um) */}
+      {dados && dados.fonte !== "dev" && (
+        <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-end" data-tour="corr-novo-aluno">
+          <label className="flex-1 text-xs font-medium text-slate-500">
+            {alunos.length ? "Adicionar aluno e corrigir" : "Comece agora: digite o nome do aluno e corrija"}
+            <input
+              value={novoAluno}
+              onChange={(e) => setNovoAluno(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !adicionando && adicionarAluno()}
+              placeholder="Nome do aluno"
+              maxLength={120}
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
+            />
+          </label>
+          <button onClick={adicionarAluno} disabled={adicionando || novoAluno.trim().length < 2} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
+            {adicionando ? "Adicionando…" : "+ Adicionar e corrigir"}
+          </button>
         </div>
       )}
 
@@ -231,16 +276,51 @@ export default function CorrigirAtividade({
             onFechar={() => abrir(null)}
             onSalvo={(c, irProximo) => {
               setDados((d) => (d ? { ...d, correcoes: [...d.correcoes.filter((x) => x.alunoId !== c.alunoId), c] } : d));
-              if (irProximo) abrir(proximo(alunoSel.id));
+              if (irProximo) {
+                const prox = proximo(alunoSel.id);
+                abrir(prox);
+                // ultimo aluno aprovado numa turma do D.E.V: pergunta se ja lanca as notas
+                if (!prox && c.status === "aprovada" && ehDev) setPerguntarDev(true);
+              }
             }}
           />
+        </div>
+      )}
+
+      {perguntarDev && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm" onClick={() => setPerguntarDev(false)} role="dialog" aria-modal="true" aria-labelledby="titulo-lancar-dev">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-2xl">📒</div>
+            <p id="titulo-lancar-dev" className="text-lg font-bold text-slate-800">
+              Correção concluída! Lançar as notas no D.E.V?
+            </p>
+            <p className="mt-1 text-sm text-slate-600">
+              {aprovadas.length} aluno(s) com correção aprovada. As notas vão para o diário da turma {atividade.turma ? <b>{atividade.turma}</b> : ""} no D.E.V.
+            </p>
+            {passaTeto && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">O valor da atividade passa dos pontos que restam no período. Ajuste antes de lançar.</p>}
+            <div className="mt-4 grid gap-2">
+              <button
+                onClick={() => {
+                  setPerguntarDev(false);
+                  void lancar();
+                }}
+                disabled={lancando || passaTeto || (ehDev && !atividade.diarioMateriaId)}
+                className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                Sim, lançar no D.E.V
+              </button>
+              <button onClick={() => setPerguntarDev(false)} className="rounded-lg px-4 py-2 text-sm text-slate-500 hover:bg-slate-100">
+                Agora não
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Lancar notas */}
       {dados && alunos.length > 0 && (
         <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
-          <p className="text-sm font-semibold text-slate-700">{ehDev ? "📒 Lançar notas no D.E.V" : "📋 Lista de notas"}</p>
+          <p className="text-sm font-semibold text-slate-700">{ehDev ? "📒 Lançar notas no D.E.V" : atividade.semNota ? "📋 Lista de acertos" : "📋 Lista de notas"}</p>
           {infantilDev && (
             <p className="rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-800">
               🧸 Educação Infantil: no D.E.V esta turma usa conceitos, então as notas desta atividade ficam só aqui no I.A Prof.
@@ -487,7 +567,7 @@ function CorrecaoAluno({
         <div className="flex items-center gap-2">
           {modo === "form" && (
             <span className="rounded-lg bg-indigo-50 px-3 py-1 text-sm font-bold text-indigo-800">
-              Nota: {fmtNum(nota)} / {fmtNum(atividade.valorTotal)}
+              {atividade.semNota ? "Acertos" : "Nota"}: {fmtNum(nota)} / {fmtNum(atividade.valorTotal)}
             </span>
           )}
           <button onClick={onFechar} className="rounded-lg px-2 py-1 text-xl leading-none text-slate-400 hover:bg-slate-100" aria-label="Fechar">

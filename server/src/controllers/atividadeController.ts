@@ -24,11 +24,12 @@ const gerarSchema = z.object({
   ano: z.string().min(1),
   uf: z.string().length(2).nullish(),
   anoLetivo: z.number().int().min(2000).max(2100),
-  periodo: z.number().int().min(1, "Selecione o período").max(4),
-  componente: z.string().trim().min(1, "Escolha a matéria"),
+  periodo: z.number().int().min(0).max(4).default(0), // 0 = sem periodo
+  componente: z.string().trim().max(80).default(""),
   turma: z.string().nullish(),
   detalhes: z.string().trim().min(3, "Descreva a atividade").max(1500, "Descreva em até 1500 caracteres"),
   valorTotal: z.number().min(0.5).max(1000).default(10),
+  semNota: z.boolean().default(false), // atividade sem nota
   // habilidades do plano de curso escolhidas pelo professor (codigos)
   habilidades: z.array(z.string().max(30)).max(10).default([]),
   // imagens do professor (miniaturas para a I.A saber o que e cada uma)
@@ -52,7 +53,7 @@ export async function gerar(req: Request, res: Response) {
     // ajuste tambem gasta I.A: no teste gratis conta como uma atividade (e usa o limite de I.A)
     const ehAjuste = !!(p.data.atual && p.data.ajuste?.trim());
     // D.E.V: so gera se o valor couber nos pontos que restam no periodo (antes de gastar I.A)
-    if (!ehAjuste && p.data.diarioTurmaId && p.data.diarioMateriaId) {
+    if (!ehAjuste && !p.data.semNota && p.data.periodo > 0 && p.data.diarioTurmaId && p.data.diarioMateriaId) {
       const pts = await pontosDoPeriodo(req.usuarioId!, { turma: p.data.diarioTurmaId, periodo: p.data.periodo, materia: p.data.diarioMateriaId, excluirId: p.data.atividadeId });
       if ("erro" in pts) return res.status(409).json({ message: pts.erro, reconectar: pts.reconectar });
       const fora = foraDoPeriodo(pts, p.data.valorTotal, p.data.periodo);
@@ -83,15 +84,16 @@ const questaoSchema = z.object({
   criterios: z.string().max(2000).default(""),
   valor: z.number().min(0).max(1000),
   imagem: z.string().max(40).default(""),
-  linhas: z.number().int().min(0).max(15).default(0),
+  linhas: z.number().int().min(0).max(30).default(0),
+  quadro: z.string().max(3000).default(""),
   figura: z.object({ tipo: z.enum(["", "emoji", "svg"]), conteudo: z.string().max(8000) }).default({ tipo: "", conteudo: "" }),
 });
 const salvarSchema = z.object({
   ano: z.string().min(1),
   uf: z.string().length(2).nullish(),
   anoLetivo: z.number().int(),
-  periodo: z.number().int().min(1).max(4),
-  componente: z.string().trim().min(1),
+  periodo: z.number().int().min(0).max(4).default(0),
+  componente: z.string().trim().max(80).default(""),
   turma: z.string().max(80).nullish(),
   turmaId: z.string().regex(objectId).nullish(),
   diarioTurmaId: z.string().regex(objectId).nullish(),
@@ -99,6 +101,7 @@ const salvarSchema = z.object({
   tipoDev: z.enum(["Normal", "Prova", "Trabalho", "Outra Atividade"]).default("Normal"),
   detalhes: z.string().max(1500).default(""),
   origem: z.enum(["ia", "externa"]).default("ia"),
+  semNota: z.boolean().default(false),
   titulo: z.string().trim().min(1, "Dê um título").max(200),
   instrucoes: z.string().max(1000).default(""),
   questoes: z.array(questaoSchema).min(1, "A atividade precisa de pelo menos uma questão").max(30),
@@ -114,6 +117,7 @@ const salvarSchema = z.object({
       layout: z.enum(["compacto", "normal", "amplo"]).default("normal"),
       imagem: z.enum(["pequena", "media", "grande"]).default("media"),
       colunas: z.boolean().default(false),
+      paginas: z.union([z.literal(0), z.literal(1), z.literal(2)]).default(0),
     })
     .nullish(),
   texto: z.object({ titulo: z.string().max(200), conteudo: z.string().max(8000), imagem: z.string().max(40), posicao: z.enum(["topo", "direita", "esquerda"]).default("topo") }).nullish(),
@@ -155,7 +159,7 @@ export async function salvar(req: Request, res: Response) {
     throw e;
   }
   // D.E.V: o valor tem que caber nos pontos que restam no periodo (atividade de fora nao passou pela geracao)
-  if (p.data.diarioTurmaId && p.data.diarioMateriaId) {
+  if (!p.data.semNota && p.data.periodo > 0 && p.data.diarioTurmaId && p.data.diarioMateriaId) {
     try {
       const pts = await pontosDoPeriodo(req.usuarioId!, { turma: p.data.diarioTurmaId, periodo: p.data.periodo, materia: p.data.diarioMateriaId });
       if (!("erro" in pts)) {
@@ -439,6 +443,29 @@ export async function gabaritoFoto(req: Request, res: Response) {
   }
 }
 
+// POST /api/atividades/:id/alunos { nome } -> adiciona um aluno na turma do I.A Prof (cria a turma se ainda nao tiver)
+// Para quem nao usa o D.E.V: vai cadastrando os alunos enquanto corrige.
+export async function adicionarAluno(req: Request, res: Response) {
+  const nome = String(req.body?.nome ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
+  if (nome.length < 2) return res.status(400).json({ message: "Digite o nome do aluno." });
+  const a = await atividadeDo(req);
+  if (!a) return res.status(404).json({ message: "Atividade não encontrada." });
+  if (a.diarioTurmaId) return res.status(400).json({ message: "Os alunos desta turma vêm do D.E.V." });
+  let t = a.turmaId ? await Turma.findOne({ _id: a.turmaId, usuario: req.usuarioId }) : null;
+  if (!t) {
+    t = await Turma.create({ usuario: req.usuarioId, nome: (a.turma || `Turma — ${a.titulo}`).slice(0, 60), ano: a.ano || null, anoLetivo: a.anoLetivo || null, alunos: [] });
+    a.turmaId = t._id as never;
+    if (!a.turma) a.turma = t.nome;
+    await a.save();
+  }
+  const existente = t.alunos.find((x) => x.nome.toLowerCase() === nome.toLowerCase());
+  if (existente) return res.json({ aluno: { id: String(existente._id), nome: existente.nome }, turmaId: String(t._id) });
+  t.alunos.push({ nome } as never);
+  await t.save();
+  const novo = t.alunos[t.alunos.length - 1];
+  res.status(201).json({ aluno: { id: String(novo._id), nome: novo.nome }, turmaId: String(t._id) });
+}
+
 // ---------- Lancar notas ----------
 // GET /api/atividades/:id/pontos -> pontos restantes no bimestre/materia do D.E.V
 export async function pontosDev(req: Request, res: Response) {
@@ -472,7 +499,8 @@ export async function lancar(req: Request, res: Response) {
   // fecha a "tarefa" de correcao desta atividade
   await fecharLote(req.usuarioId!, `correcao:${a._id}`);
 
-  if (!a.diarioTurmaId) {
+  // sem turma do D.E.V ou atividade SEM NOTA: fica so no I.A Prof
+  if (!a.diarioTurmaId || (a as { semNota?: boolean }).semNota) {
     return res.json({ destino: "iaprof", lancadas: aprovadas.length });
   }
   const tokenDev = await tokenDo(req.usuarioId!);

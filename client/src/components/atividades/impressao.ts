@@ -17,7 +17,7 @@ const CSS = `
   .cab { border: 1.5px solid #222; border-radius: 6px; padding: 8px 10px; margin-bottom: 14px; font-size: 11pt; }
   .cab .linha { display: flex; gap: 14px; flex-wrap: wrap; margin: 3px 0; }
   .cab .campo { flex: 1; min-width: 150px; white-space: nowrap; }
-  .cab .campo span { display: inline-block; border-bottom: 1px solid #555; min-width: 60%; }
+  .cab .campo span { display: inline-block; border-bottom: 1px solid #555; min-width: 60%; line-height: 1.25; padding-bottom: 1px; vertical-align: bottom; }
   h1 { font-size: 15pt; text-align: center; margin: 4px 0 2px; }
   .instr { text-align: center; font-size: 11pt; color: #333; margin-bottom: 12px; }
   .q { margin: 0 0 14px; page-break-inside: avoid; }
@@ -45,15 +45,22 @@ const CSS_IMG = `.topo{display:flex;align-items:center;gap:12px;margin-bottom:6p
   .fig .emoji{font-size:2.4em;line-height:1.2;letter-spacing:4px}
   .texto{border:1.5px solid #999;border-radius:8px;padding:10px 14px;margin:0 0 16px;page-break-inside:avoid}
   .texto h2{margin:0 0 6px;font-size:1.15em;text-align:center} .texto p{margin:0 0 6px;text-align:justify}
+  .quadro{font-family:"Courier New",Courier,monospace;white-space:pre;font-size:0.95em;line-height:1.5;margin:6px 0 4px;padding:6px 10px;border:1px solid #bbb;border-radius:6px;display:inline-block;max-width:100%;overflow:hidden}
   .texto{display:flow-root} .texto img{display:block;margin:6px auto;max-height:200px;max-width:70%;object-fit:contain}
   .texto img.dir{float:right;width:38%;max-width:38%;max-height:none;margin:2px 0 8px 14px}
   .texto img.esq{float:left;width:38%;max-width:38%;max-height:none;margin:2px 14px 8px 0}`;
 
-const montarHtml = (titulo: string, corpo: string, extraCss = "") =>
-  `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(titulo)}</title><style>${CSS}${CSS_IMG}${extraCss}</style></head><body>${corpo}</body></html>`;
+// "Caber em N folhas": encolhe a folha inteira (letra, imagens, espacos) ate caber no A4 (area util ~182 x 267 mm)
+const scriptCaber = (paginas: number) =>
+  `<script>(function(){var alvo=${paginas}*267*96/25.4,b=document.body;function caber(){var z=1;b.style.zoom=1;b.style.width="182mm";` +
+  `for(var i=0;i<30&&b.getBoundingClientRect().height>alvo&&z>0.5;i++){z=Math.round((z-0.03)*100)/100;b.style.zoom=z;b.style.width=(182/z)+"mm";}}` +
+  `caber();window.addEventListener("load",caber);})();<\/script>`;
 
-function imprimirHtml(titulo: string, corpo: string, extraCss = "") {
-  const html = montarHtml(titulo, corpo, extraCss);
+const montarHtml = (titulo: string, corpo: string, extraCss = "", paginas = 0) =>
+  `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(titulo)}</title><style>${CSS}${CSS_IMG}${extraCss}</style></head><body>${corpo}${paginas > 0 ? scriptCaber(paginas) : ""}</body></html>`;
+
+function imprimirHtml(titulo: string, corpo: string, extraCss = "", paginas = 0) {
+  const html = montarHtml(titulo, corpo, extraCss, paginas);
   const iframe = document.createElement("iframe");
   iframe.setAttribute("aria-hidden", "true");
   Object.assign(iframe.style, { position: "fixed", right: "0", bottom: "0", width: "0", height: "0", border: "0" });
@@ -86,7 +93,11 @@ function cabecalho(a: Atividade, extra: { professor?: string; escola?: string })
   const l2 = [tem("professor") ? linha("Professor(a)", extra.professor || "") : "", tem("turma") ? linha("Turma", a.turma || "") : ""].join("");
   const l3 = [tem("aluno") ? `<div class="campo">Aluno(a): <span style="min-width:80%">&nbsp;</span></div>` : "", tem("data") ? `<div class="campo" style="flex:0 0 170px">Data: ___/___/______</div>` : ""].join("");
   const info = [esc(a.componente), tem("serie") ? esc(nomeSerie(a.ano)) : "", tem("periodo") ? `${a.periodo}º período` : ""].filter(Boolean).join(" · ");
-  const l4 = `<div class="campo">${info}</div><div class="campo" style="text-align:right">Valor: ${pts(a.valorTotal)}${tem("nota") ? " &nbsp; Nota: ______" : ""}</div>`;
+  const l4 = a.semNota
+    ? info
+      ? `<div class="campo">${info}</div>`
+      : ""
+    : `<div class="campo">${info}</div><div class="campo" style="text-align:right">Valor: ${pts(a.valorTotal)}${tem("nota") ? " &nbsp; Nota: ______" : ""}</div>`;
   return `${topo}<div class="cab">${[l1, l2, l3, l4].filter(Boolean).map((l) => `<div class="linha">${l}</div>`).join("")}</div>`;
 }
 
@@ -108,10 +119,12 @@ function questaoAluno(q: Questao, n: number, a: Atividade) {
     corpo = e.colunas && curtas ? `<div class="cols">${alts}</div>` : alts;
   } else if (q.tipo === "vf") corpo = q.itens.map((it) => `<div class="vf">( &nbsp; &nbsp; ) ${esc(it.texto)}</div>`).join("");
   else {
-    const linhas = q.linhas && q.linhas > 0 ? q.linhas : q.tipo === "discursiva" ? (e.layout === "compacto" ? 3 : 4) : 2;
-    corpo = `<div class="linhas">${"<div></div>".repeat(linhas)}</div>`;
+    // com quadro (caca-palavras, ligar colunas) e linhas automaticas: o aluno responde no proprio quadro
+    const linhas = q.linhas && q.linhas > 0 ? q.linhas : q.quadro?.trim() && q.tipo === "completar" ? 0 : q.tipo === "discursiva" ? (e.layout === "compacto" ? 3 : 4) : 2;
+    corpo = linhas ? `<div class="linhas">${"<div></div>".repeat(linhas)}</div>` : "";
   }
-  return `<div class="q">${figuraHtml(q, a)}<div class="enun">${n}. ${quebra(q.enunciado)} <span class="valor">(${pts(q.valor)})</span></div>${corpo}<div style="clear:both"></div></div>`;
+  const quadro = q.quadro?.trim() ? `<div class="quadro">${esc(q.quadro)}</div>` : "";
+  return `<div class="q">${figuraHtml(q, a)}<div class="enun">${n}. ${quebra(q.enunciado)}${a.semNota ? "" : ` <span class="valor">(${pts(q.valor)})</span>`}</div>${quadro}${corpo}<div style="clear:both"></div></div>`;
 }
 
 // Tamanho das imagens e aproveitamento da folha
@@ -132,12 +145,12 @@ const cssDoEstilo = (a: Atividade) => {
 // HTML completo da folha do aluno (para imprimir ou mostrar a previa na tela)
 export function htmlDaAtividade(a: Atividade, extra: { professor?: string; escola?: string } = {}) {
   const { corpo, css } = corpoAtividade(a, extra);
-  return montarHtml(a.titulo, corpo, css);
+  return montarHtml(a.titulo, corpo, css, a.estilo?.paginas ?? 0);
 }
 
 export function imprimirAtividade(a: Atividade, extra: { professor?: string; escola?: string } = {}) {
   const { corpo, css } = corpoAtividade(a, extra);
-  imprimirHtml(a.titulo, corpo, css);
+  imprimirHtml(a.titulo, corpo, css, a.estilo?.paginas ?? 0);
 }
 
 // Atividades antigas podem ter vindo com HTML da I.A: mostra so o texto (nunca as tags)
@@ -174,10 +187,10 @@ export function imprimirGabarito(a: Atividade) {
       if (q.tipo === "multipla") g = `<div class="gab">Resposta: <b>${esc(q.resposta || "—")}</b>${q.resposta ? ` — ${esc(q.alternativas[q.resposta.charCodeAt(0) - 65] ?? "")}` : ""}</div>`;
       else if (q.tipo === "vf") g = q.itens.map((it) => `<div class="gab"><b>${it.resposta}</b> — ${esc(it.texto)}</div>`).join("");
       else g = `<div class="gab">Esperado: ${quebra(q.resposta || "—")}</div>${q.criterios ? `<div class="gab">Critérios: ${quebra(q.criterios)}</div>` : ""}`;
-      return `<div class="q"><div class="enun">${i + 1}. ${quebra(q.enunciado)} <span class="valor">(${pts(q.valor)})</span></div>${g}</div>`;
+      return `<div class="q"><div class="enun">${i + 1}. ${quebra(q.enunciado)}${a.semNota ? "" : ` <span class="valor">(${pts(q.valor)})</span>`}</div>${g}</div>`;
     })
     .join("");
-  imprimirHtml(`Gabarito — ${a.titulo}`, `<h1>Gabarito — ${esc(a.titulo)}</h1><div class="instr">${esc(a.componente)} · ${esc(a.turma || "")} · Valor: ${pts(a.valorTotal)}</div>${linhas}`);
+  imprimirHtml(`Gabarito — ${a.titulo}`, `<h1>Gabarito — ${esc(a.titulo)}</h1><div class="instr">${[esc(a.componente), esc(a.turma || ""), a.semNota ? "sem nota" : `Valor: ${pts(a.valorTotal)}`].filter(Boolean).join(" · ")}</div>${linhas}`);
 }
 
 export function imprimirNotas(a: Atividade, notas: Array<{ nome: string; nota: number | null; status: string }>) {
@@ -190,4 +203,66 @@ export function imprimirNotas(a: Atividade, notas: Array<{ nome: string; nota: n
      <table><thead><tr><th>Nº</th><th>Aluno(a)</th><th>Nota</th><th>Situação</th></tr></thead><tbody>${linhas}</tbody></table>
      <div class="rodape">Gerado pelo I.A Prof em ${new Date().toLocaleDateString("pt-BR")}</div>`
   );
+}
+
+// ---------- Baixar em PDF (sem abrir a janela de impressao) ----------
+// Monta a folha num quadro invisivel com a largura util do A4, fotografa e divide em paginas
+// sem cortar questoes no meio. "Tudo em 1 folha": a folha inteira e reduzida para caber numa pagina.
+export async function baixarPdf(a: Atividade, extra: { professor?: string; escola?: string } = {}) {
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
+  const { corpo, css } = corpoAtividade(a, extra);
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  Object.assign(iframe.style, { position: "fixed", left: "-10000px", top: "0", width: "720px", height: "1200px", border: "0" });
+  document.body.appendChild(iframe);
+  try {
+    const doc = iframe.contentWindow!.document;
+    doc.open();
+    doc.write(montarHtml(a.titulo, corpo, `${css} body{width:182mm;background:#fff;padding:0}`));
+    doc.close();
+    await new Promise<void>((ok) => (doc.readyState === "complete" ? ok() : iframe.contentWindow!.addEventListener("load", () => ok(), { once: true })));
+    await Promise.all(Array.from(doc.images).map((img) => (img.complete ? null : new Promise((ok) => ((img.onload = ok), (img.onerror = ok))))));
+    const body = doc.body;
+    const canvas = await html2canvas(body, { scale: 2, backgroundColor: "#ffffff", useCORS: true, windowWidth: body.scrollWidth });
+    const pdf = new jsPDF({ unit: "mm", format: "a4" });
+    const margemX = 14;
+    const margemY = 14;
+    const largura = 182;
+    const altura = 267;
+    const pxPorMm = canvas.width / largura;
+    const alturaPagina = altura * pxPorMm;
+    if ((a.estilo?.paginas ?? 0) === 1 || canvas.height <= alturaPagina) {
+      // cabe numa pagina (ou o professor pediu 1 folha): reduz se precisar
+      const escala = Math.min(1, alturaPagina / canvas.height);
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", margemX + (largura * (1 - escala)) / 2, margemY, largura * escala, (canvas.height / pxPorMm) * escala);
+    } else {
+      // pontos de corte permitidos: inicio de cada questao (nao corta questao no meio)
+      const topoBody = body.getBoundingClientRect().top;
+      const cortes = Array.from(body.querySelectorAll<HTMLElement>(".q, .texto, h1"))
+        .map((el) => (el.getBoundingClientRect().top - topoBody) * (canvas.width / body.getBoundingClientRect().width))
+        .filter((y) => y > 0)
+        .sort((x, y) => x - y);
+      let inicio = 0;
+      let primeira = true;
+      while (inicio < canvas.height - 2) {
+        let fim = Math.min(canvas.height, inicio + alturaPagina);
+        if (fim < canvas.height) {
+          const corte = [...cortes].reverse().find((y) => y <= fim && y > inicio + alturaPagina * 0.3);
+          if (corte) fim = corte;
+        }
+        const pedaco = document.createElement("canvas");
+        pedaco.width = canvas.width;
+        pedaco.height = Math.ceil(fim - inicio);
+        pedaco.getContext("2d")!.drawImage(canvas, 0, inicio, canvas.width, fim - inicio, 0, 0, canvas.width, fim - inicio);
+        if (!primeira) pdf.addPage();
+        pdf.addImage(pedaco.toDataURL("image/jpeg", 0.92), "JPEG", margemX, margemY, largura, (fim - inicio) / pxPorMm);
+        primeira = false;
+        inicio = fim;
+      }
+    }
+    const nome = (a.titulo || "atividade").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").toLowerCase() || "atividade";
+    pdf.save(`${nome}.pdf`);
+  } finally {
+    iframe.remove();
+  }
 }

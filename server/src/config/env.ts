@@ -13,7 +13,7 @@ export const env = {
   anthropicModelEscolha: process.env.ANTHROPIC_MODEL_ESCOLHA || "",
   // Gerar/ajustar atividades: so OpenAI (GPT)
   openaiModeloAtividade: process.env.OPENAI_MODEL_ATIVIDADE || "gpt-6.1-sol",
-  openaiRaciocinio: process.env.OPENAI_RACIOCINIO ?? "medium", // low | medium | high ("" = sem)
+  openaiRaciocinio: process.env.OPENAI_RACIOCINIO ?? "high", // low | medium | high ("" = sem): high = segue melhor o pedido
   // Correcao de atividades (ferramenta futura): objetivas/curtas no modelo barato, discursivas no Sonnet
   anthropicModelCorrecaoObjetiva: process.env.ANTHROPIC_MODEL_CORRECAO_OBJETIVA || "claude-haiku-4-5",
   anthropicModelCorrecaoDiscursiva: process.env.ANTHROPIC_MODEL_CORRECAO_DISCURSIVA || "",

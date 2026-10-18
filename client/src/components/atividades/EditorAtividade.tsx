@@ -98,17 +98,21 @@ export default function EditorAtividade({ valor, onChange }: { valor: Atividade;
           Título
           <input className={`${campo} mt-1`} value={a.titulo} onChange={(e) => set({ titulo: e.target.value })} />
         </label>
-        <label className="text-xs font-medium text-slate-500">
-          Valor total
-          <input
-            type="number"
-            min={0.5}
-            step={0.5}
-            className={`${campo} mt-1`}
-            value={a.valorTotal}
-            onChange={(e) => set({ valorTotal: Number(e.target.value) || 0 })}
-          />
-        </label>
+        {a.semNota ? (
+          <p className="self-end pb-2 text-xs font-medium text-slate-500">Sem nota</p>
+        ) : (
+          <label className="text-xs font-medium text-slate-500">
+            Valor total
+            <input
+              type="number"
+              min={0.5}
+              step={0.5}
+              className={`${campo} mt-1`}
+              value={a.valorTotal}
+              onChange={(e) => set({ valorTotal: Number(e.target.value) || 0 })}
+            />
+          </label>
+        )}
       </div>
       <label className="block text-xs font-medium text-slate-500">
         Instruções para o aluno
@@ -188,6 +192,10 @@ export default function EditorAtividade({ valor, onChange }: { valor: Atividade;
                 <option value="media">Médias</option>
                 <option value="grande">Grandes</option>
               </select>
+              <label className="flex items-center gap-1 font-medium" title="Encolhe letra, imagens e espaços até tudo caber em uma folha A4">
+                <input type="checkbox" className="accent-indigo-600" checked={estilo.paginas === 1} onChange={(e) => set({ estilo: { ...estilo, paginas: e.target.checked ? 1 : 0 } })} />
+                Tudo em 1 folha
+              </label>
               <label className="flex items-center gap-1">
                 <input type="checkbox" className="accent-indigo-600" checked={!!estilo.colunas} onChange={(e) => set({ estilo: { ...estilo, colunas: e.target.checked } })} />
                 Alternativas em 2 colunas
@@ -300,7 +308,7 @@ export default function EditorAtividade({ valor, onChange }: { valor: Atividade;
                   </option>
                 ))}
               </select>
-              <label className="flex items-center gap-1 text-xs text-slate-500" data-tour={i === 0 ? "ativ-valor-q" : undefined}>
+              <label className={`flex items-center gap-1 text-xs text-slate-500 ${a.semNota ? "hidden" : ""}`} data-tour={i === 0 ? "ativ-valor-q" : undefined}>
                 Valor
                 <input
                   type="number"
@@ -433,13 +441,28 @@ export default function EditorAtividade({ valor, onChange }: { valor: Atividade;
                   <input
                     type="number"
                     min={0}
-                    max={15}
+                    max={30}
                     value={q.linhas ?? 0}
-                    onChange={(e) => setQ(i, { linhas: Math.max(0, Math.min(15, Number(e.target.value) || 0)) })}
+                    onChange={(e) => setQ(i, { linhas: Math.max(0, Math.min(30, Number(e.target.value) || 0)) })}
                     className="w-14 rounded border border-slate-300 px-1 py-0.5 text-xs"
                   />
                   <span className="font-normal text-slate-400">(0 = automático)</span>
                 </label>
+                {q.quadro !== undefined && q.quadro !== "" ? (
+                  <label className="block text-[11px] font-medium text-slate-500">
+                    Quadro (caça-palavras, colunas para ligar, tabela) — fica alinhado na folha
+                    <textarea
+                      rows={Math.min(14, Math.max(3, q.quadro.split("\n").length))}
+                      className={`${campo} mt-0.5 font-mono`}
+                      value={q.quadro}
+                      onChange={(e) => setQ(i, { quadro: e.target.value })}
+                    />
+                  </label>
+                ) : (
+                  <button type="button" onClick={() => setQ(i, { quadro: " " })} className="text-[11px] font-medium text-indigo-600 hover:underline">
+                    + quadro alinhado (colunas para ligar, tabela, caça-palavras)
+                  </button>
+                )}
                 {q.tipo === "discursiva" && (
                   <label className="text-[11px] font-medium text-slate-500">
                     Critérios de correção (o que vale nota inteira / metade)

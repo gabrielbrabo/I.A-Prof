@@ -8,8 +8,8 @@ import { mesmoComponente } from "../../lib/componente";
 import { gravarPref, lerPref } from "../../lib/prefs";
 import { ErroApi } from "../../lib/sessao";
 import EditorAtividade, { escolherImagens, problemasGabarito } from "./EditorAtividade";
-import { htmlDaAtividade, imprimirAtividade, imprimirGabarito } from "./impressao";
-import { CaixaAjuste, PreviaAtividade } from "./AjusteAtividade";
+import { baixarPdf, htmlDaAtividade, imprimirAtividade, imprimirGabarito } from "./impressao";
+import { CaixaAjuste, PreviaAtividade, BotaoPdf } from "./AjusteAtividade";
 
 const campo =
   "mt-1 w-full min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
@@ -171,6 +171,10 @@ function GerarAtividadeTela({
   // "ia" = gerar com I.A; "externa" = a atividade foi feita fora do I.A Prof: so o gabarito para corrigir
   const [origem, setOrigem] = useState<"ia" | "externa">(() => (editar?.origem ?? (externa ? "externa" : r0?.origem ?? "ia")) as "ia" | "externa");
   const ehExterna = origem === "externa";
+  // Vale nota? Sem nota = so exercicio (sem valor; nao vai para o D.E.V; a correcao conta acertos)
+  const [valeNota, setValeNota] = useState<boolean>(() => (editar ? !editar.semNota : r0?.atividade ? !r0.atividade.semNota : lerPref("ativ.valeNota", "1") === "1"));
+  // campos menos usados (turma, periodo, habilidades) ficam em "Mais opcoes"
+  const [mais, setMais] = useState<boolean>(() => !!(editar?.periodo || editar?.turma || r0?.periodo || r0?.turmaChave || r0?.habSel?.length));
   const [qtdQuestoes, setQtdQuestoes] = useState(10);
   const [tipoQuestoes, setTipoQuestoes] = useState<"multipla" | "vf" | "discursiva" | "completar">("multipla");
   const [lendoFoto, setLendoFoto] = useState(false);
@@ -231,6 +235,7 @@ function GerarAtividadeTela({
   // Educacao Infantil (D.E.V com conceitos): usa a turma e os alunos do D.E.V, mas atividade/notas ficam so no I.A Prof
   const infantilDev = !!turmaDev && turmaDev.notas === false;
   const devNotas = ehDev && !infantilDev;
+  const exigeDev = devNotas && valeNota; // turma do D.E.V com nota: periodo e materia do D.E.V obrigatorios
   const temCorrecoes = !!editar && (editar.corrigidas ?? 0) > 0;
 
   // nome da turma quando as listas chegam
@@ -287,22 +292,22 @@ function GerarAtividadeTela({
   const [modalPontos, setModalPontos] = useState<PontosPeriodo | null>(null);
   useEffect(() => {
     setPontos(null);
-    if (!devNotas || !turmaDev || !materiaDev || !periodo) return;
+    if (!exigeDev || !turmaDev || !materiaDev || !periodo) return;
     atividadesApi
       .pontosPeriodo({ turma: turmaDev.id, periodo, materia: materiaDev, excluir: atividade?._id ?? null })
       .then(setPontos)
       .catch(() => setPontos(null));
-  }, [devNotas, turmaDev?.id, materiaDev, periodo, atividade?._id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [exigeDev, turmaDev?.id, materiaDev, periodo, atividade?._id]); // eslint-disable-line react-hooks/exhaustive-deps
   const valorAtual = atividade ? atividade.valorTotal : valorTotal;
-  const naoCabe = !!pontos && pontos.restante != null && valorAtual > pontos.restante + 1e-9;
-  const pronto = !!ano && periodo > 0 && !!componente.trim() && (!devNotas || !!materiaDev);
-  const precisaHabilidade = habilidadesDisp.length > 0 && !habEscolhidas.length;
+  const naoCabe = exigeDev && !!pontos && pontos.restante != null && valorAtual > pontos.restante + 1e-9;
+  // so a serie e obrigatoria; turma do D.E.V com nota pede tambem periodo e materia
+  const pronto = !!ano && (!exigeDev || (periodo > 0 && !!materiaDev));
+  const msgFaltando = !ano ? "Escolha a série." : !periodo ? "Escolha o período (a turma do D.E.V vale nota)." : "Escolha a matéria do D.E.V.";
 
   async function gerar(modo: "novo" | "ajuste" = "novo") {
     setErro(null);
     setAviso(null);
-    if (!pronto) return setErro(devNotas && !materiaDev ? "Escolha a matéria do D.E.V." : "Preencha série, período e matéria.");
-    if (precisaHabilidade) return setErro("Escolha pelo menos uma habilidade do plano de curso para a atividade.");
+    if (!pronto) return setErro(msgFaltando);
     if (detalhes.trim().length < 3) return setErro("Descreva a atividade que você quer.");
     if (modo === "ajuste" && (!atividade || !ajuste.trim())) return;
     if (modo === "novo" && naoCabe) return setModalPontos(pontos); // nao gasta I.A com valor que nao cabe no periodo
@@ -323,7 +328,8 @@ function GerarAtividadeTela({
         componente: componente.trim(),
         turma: turmaNome,
         detalhes: detalhes.trim(),
-        valorTotal: atividade?.valorTotal ?? valorTotal,
+        valorTotal: valeNota ? atividade?.valorTotal ?? valorTotal : 10,
+        semNota: !valeNota,
         habilidades: habEscolhidas,
         imagens: miniaturas,
         respostas: respostas.trim() || null,
@@ -331,8 +337,8 @@ function GerarAtividadeTela({
         ajuste: modo === "ajuste" ? ajuste.trim() : null,
         escola: atividade?.cabecalho?.escola || turmaDev?.escola || null,
         professor: nomeProfessor,
-        diarioTurmaId: devNotas && turmaDev ? turmaDev.id : null,
-        diarioMateriaId: devNotas ? materiaDev || null : null,
+        diarioTurmaId: exigeDev && turmaDev ? turmaDev.id : null,
+        diarioMateriaId: exigeDev ? materiaDev || null : null,
         atividadeId: atividade?._id ?? null,
       });
       onUsouIA();
@@ -344,7 +350,7 @@ function GerarAtividadeTela({
       setAtividade({
         ...(atividade?._id ? { _id: atividade._id } : {}),
         ...dadosBase(),
-        valorTotal: atividade?.valorTotal ?? valorTotal,
+        valorTotal: valeNota ? atividade?.valorTotal ?? valorTotal : r.questoes.length,
         titulo: r.titulo,
         instrucoes: r.instrucoes,
         questoes: r.questoes,
@@ -381,7 +387,7 @@ function GerarAtividadeTela({
   const camposOk = (): boolean => {
     setErro(null);
     if (!pronto) {
-      setErro(devNotas && !materiaDev ? "Escolha a matéria do D.E.V." : "Preencha série, período e matéria.");
+      setErro(msgFaltando);
       return false;
     }
     return true;
@@ -449,8 +455,9 @@ function GerarAtividadeTela({
     diarioMateriaId: devNotas ? materiaDev || null : null,
     tipoDev,
     detalhes,
-    valorTotal,
+    valorTotal: valeNota ? valorTotal : atividade?.questoes.length || 1,
     origem,
+    semNota: !valeNota,
   });
 
   const problemas = useMemo(() => (atividade ? problemasGabarito(atividade.questoes) : []), [atividade]);
@@ -468,7 +475,8 @@ function GerarAtividadeTela({
       gravarPref("ano", ano);
       gravarPref("ativ.turma", turmaChave);
       gravarPref("ativ.periodo", String(periodo));
-      gravarPref("ativ.valor", String(atividade.valorTotal));
+      if (valeNota) gravarPref("ativ.valor", String(atividade.valorTotal));
+      gravarPref("ativ.valeNota", valeNota ? "1" : "0");
       onSalva();
       if (corrigirDepois) onCorrigir(salva);
       else onIrLista(salva);
@@ -589,8 +597,9 @@ function GerarAtividadeTela({
             </ul>
           )}
           <div className="flex flex-wrap justify-end gap-2 border-t border-indigo-100 pt-3">
+            <BotaoPdf onPdf={() => baixarPdf({ ...atividade, ...dadosBase(), valorTotal: atividade.valorTotal }, extrasImpressao)} className="rounded-lg px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-white" />
             <button onClick={() => imprimirAtividade({ ...atividade, ...dadosBase(), valorTotal: atividade.valorTotal }, extrasImpressao)} className="rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-white">
-              🖨️ Imprimir / PDF
+              🖨️ Imprimir
             </button>
             <button onClick={() => imprimirGabarito({ ...atividade, ...dadosBase(), valorTotal: atividade.valorTotal })} className="rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-white">
               🔑 Imprimir gabarito
@@ -623,7 +632,7 @@ function GerarAtividadeTela({
             ))}
           </select>
         </div>
-        <div className="col-span-2 min-w-0 sm:col-span-1 lg:col-span-1" data-tour="ativ-turma">
+        <div className={`col-span-2 min-w-0 sm:col-span-1 lg:col-span-1 ${mais || diario?.conectado || turmaChave ? "" : "hidden"}`} data-tour="ativ-turma">
           <SeletorTurma
             valor={turmaChave}
             bloqueado={temCorrecoes}
@@ -638,14 +647,14 @@ function GerarAtividadeTela({
             onIrTurmas={onIrTurmas}
           />
         </div>
-        <div className="min-w-0">
+        <div className={`min-w-0 ${mais ? "" : "hidden"}`}>
           <label className="text-xs font-medium text-slate-500">Ano letivo</label>
           <input type="number" className={campo} value={anoLetivo} onChange={(e) => setAnoLetivo(Number(e.target.value) || new Date().getFullYear())} />
         </div>
-        <div className="min-w-0">
-          <label className="text-xs font-medium text-slate-500">Período *</label>
-          <select data-tour="ativ-periodo" className={`${campo} ${!periodo ? "border-amber-400 bg-amber-50" : ""}`} value={periodo} onChange={(e) => setPeriodo(Number(e.target.value))}>
-            <option value={0}>{carregandoPlano ? "Carregando…" : "Selecione…"}</option>
+        <div className={`min-w-0 ${mais || exigeDev || periodo > 0 ? "" : "hidden"}`}>
+          <label className="text-xs font-medium text-slate-500">Período{exigeDev ? " *" : ""}</label>
+          <select data-tour="ativ-periodo" className={`${campo} ${exigeDev && !periodo ? "border-amber-400 bg-amber-50" : ""}`} value={periodo} onChange={(e) => setPeriodo(Number(e.target.value))}>
+            <option value={0}>{carregandoPlano ? "Carregando…" : exigeDev ? "Selecione…" : "Sem período"}</option>
             {Array.from({ length: qtdPeriodos }, (_, i) => i + 1).map((n) => (
               <option key={n} value={n}>
                 {n}º {nomePer}
@@ -654,8 +663,8 @@ function GerarAtividadeTela({
           </select>
         </div>
         <div className="col-span-2 min-w-0" data-tour="ativ-materia">
-          <label className="text-xs font-medium text-slate-500">Matéria *{devNotas ? " (do D.E.V)" : ""}</label>
-          {devNotas ? (
+          <label className="text-xs font-medium text-slate-500">{exigeDev ? "Matéria * (do D.E.V)" : "Matéria (opcional)"}</label>
+          {exigeDev ? (
             <select
               className={`${campo} ${!materiaDev ? "border-amber-400 bg-amber-50" : ""}`}
               value={materiaDev}
@@ -675,7 +684,7 @@ function GerarAtividadeTela({
             <>
               <input
                 list="materias-plano"
-                className={`${campo} ${!componente.trim() ? "border-amber-400 bg-amber-50" : ""}`}
+                className={campo}
                 value={componente}
                 placeholder="Digite a matéria (ex.: Matemática)"
                 onChange={(e) => setComponente(e.target.value)}
@@ -688,7 +697,7 @@ function GerarAtividadeTela({
             </>
           )}
         </div>
-        {devNotas && (
+        {exigeDev && (
           <div className="min-w-0">
             <label className="text-xs font-medium text-slate-500">Tipo no D.E.V</label>
             <select className={campo} value={tipoDev} onChange={(e) => setTipoDev(e.target.value as TipoDev)}>
@@ -699,38 +708,66 @@ function GerarAtividadeTela({
           </div>
         )}
         <div className="min-w-0" data-tour="ativ-valor">
-          <label className="text-xs font-medium text-slate-500">Valor total</label>
-          <input
-            type="number"
-            min={0.5}
-            step={0.5}
-            className={campo}
-            value={atividade ? atividade.valorTotal : valorTotal}
-            onChange={(e) => {
-              const v = Number(e.target.value) || 0;
-              setValorTotal(v);
-              if (atividade) setAtividade({ ...atividade, valorTotal: v });
-            }}
-          />
+          <label className="flex items-center gap-1.5 text-xs font-medium text-slate-500">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-indigo-600"
+              checked={valeNota}
+              disabled={!!atividade?._id && temCorrecoes}
+              onChange={(e) => {
+                setValeNota(e.target.checked);
+                if (atividade)
+                  setAtividade({
+                    ...atividade,
+                    semNota: !e.target.checked,
+                    questoes: e.target.checked ? atividade.questoes : atividade.questoes.map((q) => ({ ...q, valor: 1 })),
+                    valorTotal: e.target.checked ? valorTotal : atividade.questoes.length,
+                  });
+              }}
+            />
+            Vale nota
+          </label>
+          {valeNota ? (
+            <input
+              type="number"
+              min={0.5}
+              step={0.5}
+              aria-label="Valor total"
+              className={campo}
+              value={atividade ? atividade.valorTotal : valorTotal}
+              onChange={(e) => {
+                const v = Number(e.target.value) || 0;
+                setValorTotal(v);
+                if (atividade) setAtividade({ ...atividade, valorTotal: v });
+              }}
+            />
+          ) : (
+            <p className="mt-1 rounded-lg bg-slate-50 px-2 py-2 text-xs text-slate-500">Só exercício, sem nota.</p>
+          )}
         </div>
       </div>
+      {!editar && (
+        <button type="button" onClick={() => setMais((m) => !m)} className="-mt-2 text-xs font-medium text-indigo-600 hover:underline" data-tour="ativ-mais">
+          {mais ? "▲ Menos opções" : "⚙️ Mais opções (turma, período, habilidades do plano)"}
+        </button>
+      )}
 
       {infantilDev && (
         <p className="rounded-lg bg-sky-50 px-4 py-2.5 text-sm text-sky-800">
           🧸 Turma de Educação Infantil: no D.E.V ela usa conceitos. Você usa a lista de alunos do D.E.V para corrigir aqui, mas a atividade e as notas ficam só no I.A Prof.
         </p>
       )}
-      {devNotas && periodoDev && !periodoDev.aberto && (
+      {exigeDev && periodoDev && !periodoDev.aberto && (
         <p className="rounded-lg bg-rose-50 px-4 py-2.5 text-sm text-rose-700">📒 O {periodo}º período desta turma está fechado no D.E.V: dá para gerar e corrigir, mas as notas só entram no D.E.V se a escola reabrir.</p>
       )}
-      {devNotas && pontos && pontos.total > 0 ? (
+      {exigeDev && pontos && pontos.total > 0 ? (
         <p className={`-mt-2 text-xs ${naoCabe ? "font-semibold text-rose-600" : "text-slate-500"}`} data-tour="ativ-pontos">
           📒 D.E.V — {periodo}º período: {fmtPts(pontos.total)} pontos · {fmtPts(pontos.usadoDev)} já lançados
           {pontos.pendente > 0 ? ` · ${fmtPts(pontos.pendente)} em atividades salvas aqui` : ""} · <b>restam {fmtPts(pontos.restante ?? 0)}</b>
           {naoCabe ? " — o valor desta atividade não cabe." : "."}
         </p>
       ) : (
-        devNotas &&
+        exigeDev &&
         periodoDev &&
         periodoDev.totalPontos > 0 && <p className="-mt-2 text-xs text-slate-500">📒 No D.E.V, o {periodo}º período vale {periodoDev.totalPontos} pontos no total por matéria.</p>
       )}
@@ -751,7 +788,7 @@ function GerarAtividadeTela({
       {!ehExterna && (
         <>
       {/* Habilidades do plano de curso (periodo + materia) */}
-      <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4" data-tour="ativ-habilidades">
+      <div className={`rounded-xl border border-slate-200 bg-white p-3 sm:p-4 ${(mais || exigeDev || habSel.length > 0) && periodo > 0 ? "" : "hidden"}`} data-tour="ativ-habilidades">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm font-semibold text-slate-700">
             Habilidades da atividade {habilidadesDisp.length > 0 && <span className="text-rose-600">*</span>}
@@ -803,7 +840,7 @@ function GerarAtividadeTela({
             })}
           </ul>
         )}
-        {precisaHabilidade && <p className="mt-2 text-xs text-amber-700">Marque pelo menos uma habilidade.</p>}
+        {habilidadesDisp.length > 0 && !habEscolhidas.length && <p className="mt-2 text-xs text-slate-500">Opcional: marque habilidades para a I.A trabalhar.</p>}
       </div>
 
       {/* Pedido do professor */}
@@ -993,6 +1030,7 @@ function GerarAtividadeTela({
           html={htmlDaAtividade({ ...atividade, ...dadosBase(), valorTotal: atividade.valorTotal }, extrasImpressao)}
           onFechar={() => setPrevia(false)}
           onImprimir={() => imprimirAtividade({ ...atividade, ...dadosBase(), valorTotal: atividade.valorTotal }, extrasImpressao)}
+          onPdf={() => baixarPdf({ ...atividade, ...dadosBase(), valorTotal: atividade.valorTotal }, extrasImpressao)}
           ajuste={{ valor: ajuste, onChange: setAjuste, onAjustar: () => gerar("ajuste"), ajustando }}
         />
       )}

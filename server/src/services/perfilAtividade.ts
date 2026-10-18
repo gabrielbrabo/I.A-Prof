@@ -45,9 +45,12 @@ export async function aprenderDaSalva(usuario: string, a: Salva) {
   }
 }
 
+// So aprende ajustes de JEITO (visual, tamanho, nivel), nunca de conteudo de uma atividade (ex.: "troque a questao 5")
+const AJUSTE_DE_ESTILO = /imag|figur|letra|fonte|folha|p[aá]gina|espa[cç]|colorid|cor\b|cabe[cç]alho|logo|coluna|mai[uú]scul|bast[aã]o|linha|curt|long|f[aá]cil|dif[ií]cil|simples|n[ií]vel|enunciad|layout|margem|tamanho|nota|valor/i;
+const AJUSTE_PONTUAL = /quest[aã]o\s*\d|n[uú]mero\s*\d|\bq\d|troque|substitu|tire a|remova a|apague a/i;
 export async function aprenderDoAjuste(usuario: string, ajuste: string) {
   const t = ajuste.trim().replace(/\s+/g, " ").slice(0, 200);
-  if (t.length < 3) return;
+  if (t.length < 3 || !AJUSTE_DE_ESTILO.test(t) || AJUSTE_PONTUAL.test(t)) return;
   try {
     const p = await PerfilAtividade.findOne({ usuario });
     const lista = [t, ...(p?.ajustes ?? []).filter((x) => x.toLowerCase() !== t.toLowerCase())].slice(0, MAX_AJUSTES);
@@ -90,7 +93,7 @@ export async function preferenciasDoProfessor(usuario: string): Promise<{ texto:
   if (p.salvas >= 1 && p.camposCabecalho?.length) linhas.push(`- Cabeçalho que ele usa: ${p.camposCabecalho.join(", ")}${p.escola ? ` — escola "${p.escola}"` : ""}.`);
   if (p.ajustes?.length) linhas.push(`- Ajustes que ele já pediu antes (já entregue assim, para ele não precisar pedir de novo): ${p.ajustes.slice(0, 8).map((a) => `"${a}"`).join("; ")}.`);
   const texto = linhas.length
-    ? `Preferências aprendidas deste professor (aplique por padrão; o que ele pedir AGORA sempre vence; ajustes pontuais de uma questão específica não valem para outras atividades):\n${linhas.join("\n")}`
+    ? `Preferências de JEITO deste professor (visual e formato; aplique por padrão; o pedido de AGORA sempre vence). NUNCA reaproveite tema, texto ou questões de atividades anteriores — cada atividade é nova e segue só o pedido atual:\n${linhas.join("\n")}`
     : "";
   return { texto, salvas: p.salvas ?? 0, ajustes: p.ajustes?.length ?? 0 };
 }

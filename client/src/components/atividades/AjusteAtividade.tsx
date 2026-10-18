@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // Pedidos comuns de ajuste (um toque coloca no campo; o professor pode completar)
 const SUGESTOES = [
@@ -81,11 +81,13 @@ export function PreviaAtividade({
   html,
   onFechar,
   onImprimir,
+  onPdf,
   ajuste,
 }: {
   html: string;
   onFechar: () => void;
   onImprimir: () => void;
+  onPdf?: () => Promise<void>;
   ajuste?: { valor: string; onChange: (v: string) => void; onAjustar: () => void; ajustando: boolean };
 }) {
   const quadro = useRef<HTMLIFrameElement>(null);
@@ -99,8 +101,9 @@ export function PreviaAtividade({
       <div className="flex items-center justify-between gap-2 bg-white px-3 py-2 shadow">
         <p className="text-sm font-semibold text-slate-800">👁️ Como vai ficar a folha</p>
         <div className="flex gap-2">
+          {onPdf && <BotaoPdf onPdf={onPdf} className="rounded-lg px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-50" />}
           <button onClick={onImprimir} className="rounded-lg px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100">
-            🖨️ Imprimir / PDF
+            🖨️ Imprimir
           </button>
           <button onClick={onFechar} className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white hover:bg-slate-900">
             Fechar
@@ -129,5 +132,31 @@ export function PreviaAtividade({
         </div>
       )}
     </div>
+  );
+}
+
+// Botao "Baixar PDF" (gera o arquivo no proprio navegador)
+export function BotaoPdf({ onPdf, className, rotulo = "⬇️ Baixar PDF" }: { onPdf: () => Promise<void>; className?: string; rotulo?: string }) {
+  const [gerando, setGerando] = useState(false);
+  const [falhou, setFalhou] = useState(false);
+  return (
+    <button
+      onClick={async () => {
+        setGerando(true);
+        setFalhou(false);
+        try {
+          await onPdf();
+        } catch {
+          setFalhou(true);
+        } finally {
+          setGerando(false);
+        }
+      }}
+      disabled={gerando}
+      className={className}
+      title={falhou ? "Não deu para gerar o PDF. Use Imprimir e escolha “Salvar como PDF”." : "Baixar a folha em PDF"}
+    >
+      {gerando ? "Gerando PDF…" : falhou ? "⚠️ Tentar PDF de novo" : rotulo}
+    </button>
   );
 }

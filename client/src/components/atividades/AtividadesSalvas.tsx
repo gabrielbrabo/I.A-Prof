@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Atividade, atividadesApi, fmtNum } from "../../api/atividades";
-import { htmlDaAtividade, imprimirAtividade, imprimirGabarito } from "./impressao";
-import { PreviaAtividade } from "./AjusteAtividade";
+import { baixarPdf, htmlDaAtividade, imprimirAtividade, imprimirGabarito } from "./impressao";
+import { BotaoPdf, PreviaAtividade } from "./AjusteAtividade";
 
 // Lista das atividades salvas: corrigir, editar, imprimir, excluir
 export default function AtividadesSalvas({
@@ -117,7 +117,7 @@ export default function AtividadesSalvas({
                     {a._id === salvaAgora && <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">nova</span>}
                   </p>
                   <p className="text-xs text-slate-500">
-                    {a.componente} · {a.turma || "sem turma"} · {a.periodo}º período · {a.questoes.length} questões · vale {fmtNum(a.valorTotal)}
+                    {[a.componente, a.turma || "sem turma", a.periodo ? `${a.periodo}º período` : ""].filter(Boolean).join(" · ")} · {a.questoes.length} questões · {a.semNota ? "sem nota" : `vale ${fmtNum(a.valorTotal)}`}
                     {a.createdAt ? ` · ${new Date(a.createdAt).toLocaleDateString("pt-BR")}` : ""}
                   </p>
                   <div className="mt-1 flex flex-wrap gap-1.5 text-[11px]">
@@ -141,6 +141,9 @@ export default function AtividadesSalvas({
                   <button onClick={() => completa(a).then(onEditar)} className="rounded-lg px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50">
                     ✏️ Editar
                   </button>
+                  {a.origem !== "externa" && (
+                    <BotaoPdf onPdf={() => completa(a).then((c) => baixarPdf(c, { professor: professorNome }))} rotulo="⬇️ PDF" className="rounded-lg px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50" />
+                  )}
                   {a.origem !== "externa" && <button onClick={() => completa(a).then((c) => imprimirAtividade(c, { professor: professorNome }))} className="rounded-lg px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100">
                     🖨️ Imprimir
                   </button>}
@@ -173,6 +176,7 @@ export default function AtividadesSalvas({
           html={htmlDaAtividade(vendo, { professor: professorNome })}
           onFechar={() => setVendo(null)}
           onImprimir={() => imprimirAtividade(vendo, { professor: professorNome })}
+          onPdf={() => baixarPdf(vendo, { professor: professorNome })}
         />
       )}
     </div>

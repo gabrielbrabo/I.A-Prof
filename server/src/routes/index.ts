@@ -84,6 +84,7 @@ router.get("/atividades/:id", h(ativ.obter));
 router.put("/atividades/:id", h(ativ.atualizar));
 router.delete("/atividades/:id", h(ativ.remover));
 router.get("/atividades/:id/alunos", h(ativ.alunos));
+router.post("/atividades/:id/alunos", h(ativ.adicionarAluno));
 router.get("/atividades/:id/pontos", h(ativ.pontosDev));
 router.post("/atividades/:id/lancar", h(ativ.lancar));
 router.put("/atividades/:id/correcoes/:alunoId", h(ativ.salvarCorrecao));

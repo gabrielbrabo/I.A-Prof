@@ -34,6 +34,7 @@ export interface Estilo {
   layout?: "compacto" | "normal" | "amplo"; // aproveitamento da folha
   imagem?: "pequena" | "media" | "grande"; // tamanho das imagens
   colunas?: boolean; // alternativas em 2 colunas
+  paginas?: 0 | 1 | 2; // 1 = tudo em uma folha (a impressao encolhe ate caber)
 }
 // Texto de apoio (leitura e interpretacao)
 export interface PontosPeriodo {
@@ -77,6 +78,7 @@ export interface Questao {
   imagem?: string;
   figura?: Figura;
   linhas?: number; // linhas para resposta (0 = automatico)
+  quadro?: string; // bloco alinhado: caca-palavras, colunas para ligar, tabela
 }
 
 export interface Atividade {
@@ -92,6 +94,7 @@ export interface Atividade {
   diarioMateriaId: string | null;
   tipoDev: TipoDev;
   detalhes: string;
+  semNota?: boolean; // so exercicio: sem nota (correcao conta acertos; nao vai para o D.E.V)
   origem?: "ia" | "externa"; // externa = atividade feita fora do I.A Prof (so o gabarito, para corrigir)
   titulo: string;
   instrucoes: string;
@@ -191,6 +194,7 @@ export const atividadesApi = {
     ajuste?: string | null;
     escola?: string | null;
     professor?: string | null;
+    semNota?: boolean;
     diarioTurmaId?: string | null; // D.E.V: o servidor confere os pontos do periodo
     diarioMateriaId?: string | null;
     atividadeId?: string | null;
@@ -244,6 +248,8 @@ export const atividadesApi = {
     const resp = await fetch(`${BASE}/atividades/gabarito-foto`, { method: "POST", headers: cabecalhoAuth(), body: fd });
     return lerResposta(resp);
   },
+  // turma do I.A Prof: adiciona um aluno enquanto corrige (cria a turma se nao tiver)
+  adicionarAluno: (id: string, nome: string) => api<{ aluno: { id: string; nome: string }; turmaId: string }>(`/atividades/${id}/alunos`, { method: "POST", body: JSON.stringify({ nome }) }),
   lancar: (id: string) =>
     api<{ destino: "dev" | "iaprof"; lancadas: number; criadas?: number; atualizadas?: number }>(`/atividades/${id}/lancar`, { method: "POST" }),
 };
