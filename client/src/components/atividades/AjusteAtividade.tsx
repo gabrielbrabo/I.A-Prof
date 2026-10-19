@@ -7,9 +7,12 @@ const SUGESTOES = [
   "Coloque imagem em todas as questões",
   "Deixe mais fácil",
   "Deixe mais difícil",
-  "Letra maior",
-  "Mais colorida",
+  "Troque por questões de interpretação",
 ];
+
+// Pedidos que o professor faz a mao no editor, sem gastar I.A
+const DA_PRA_FAZER_A_MAO =
+  /\blogo|tamanho|imagens? (maior|menor|pequen|grande|m[eé]di)|(maior|menor|aumente|diminua).{0,12}imag|letra|fonte|cabe[cç]alho|nome da escola|t[ií]tulo|valor|nota|gabarito|colorid|coluna|caixa alta|mai[uú]scul|instru[cç]/i;
 
 // Caixa "Quer mudar algo?": bem visivel, com sugestoes prontas
 export function CaixaAjuste({
@@ -18,13 +21,21 @@ export function CaixaAjuste({
   onAjustar,
   ajustando,
   compacta = false,
+  onEditarMao,
 }: {
   valor: string;
   onChange: (v: string) => void;
   onAjustar: () => void;
   ajustando: boolean;
   compacta?: boolean;
+  onEditarMao?: () => void; // abre o editor manual (sem gastar I.A)
 }) {
+  const aMao = DA_PRA_FAZER_A_MAO.test(valor);
+  const botaoMao = onEditarMao && (
+    <button type="button" onClick={onEditarMao} className="shrink-0 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-emerald-800 ring-1 ring-emerald-300 hover:bg-emerald-100">
+      ✍️ Editar à mão
+    </button>
+  );
   const juntar = (s: string) => onChange(valor.trim() ? `${valor.trim().replace(/[.;,]$/, "")}; ${s.toLowerCase()}` : s);
   return (
     <div className={`rounded-2xl border-2 border-violet-300 bg-gradient-to-br from-violet-50 to-indigo-50 ${compacta ? "p-3" : "p-4"}`} data-tour="ativ-ajuste">
@@ -35,6 +46,19 @@ export function CaixaAjuste({
         Não ficou do seu jeito? Peça à I.A para ajustar
       </label>
       {!compacta && <p className="mt-0.5 text-xs text-violet-800">Escreva o que mudar. Ela mantém o resto e mostra a atividade ajustada.</p>}
+      {/* Custo: ajuste com I.A gasta; editar a mao e de graca */}
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900" data-tour="ativ-ajuste-custo">
+        {compacta ? (
+          <span>
+            <b>⚡ Ajuste com a I.A gasta do seu limite.</b> Logo, imagens, letra e textos: à mão é de graça.
+          </span>
+        ) : (
+          <span>
+            <b>⚡ Ajustar com a I.A gasta do seu limite de uso</b> (no teste grátis, conta como 1 atividade). Logo, tamanho das imagens, letra, cabeçalho, textos, valores e gabarito você muda <b>à mão, sem gastar nada</b>.
+          </span>
+        )}
+        {botaoMao}
+      </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {SUGESTOES.map((s) => (
           <button
@@ -71,7 +95,12 @@ export function CaixaAjuste({
           {ajustando ? "Ajustando…" : "✨ Ajustar"}
         </button>
       </div>
-      <p className="mt-1.5 text-[11px] text-violet-700">⚡ Cada ajuste usa I.A: consome do seu limite do mês (ou dos créditos). No teste grátis, conta como 1 atividade.</p>
+      {aMao && (
+        <p className="mt-1.5 flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-900" role="status">
+          💡 Isso dá para fazer à mão no editor, sem gastar seu limite.
+          {botaoMao}
+        </p>
+      )}
     </div>
   );
 }
@@ -88,7 +117,7 @@ export function PreviaAtividade({
   onFechar: () => void;
   onImprimir: () => void;
   onPdf?: () => Promise<void>;
-  ajuste?: { valor: string; onChange: (v: string) => void; onAjustar: () => void; ajustando: boolean };
+  ajuste?: { valor: string; onChange: (v: string) => void; onAjustar: () => void; ajustando: boolean; onEditarMao?: () => void };
 }) {
   const quadro = useRef<HTMLIFrameElement>(null);
   useEffect(() => {

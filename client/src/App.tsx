@@ -1,3 +1,4 @@
+import SeloConsumo from "./components/SeloConsumo";
 import { useEffect, useRef, useState } from "react";
 import RegistroAula from "./components/RegistroAula";
 import Historico from "./components/Historico";
@@ -361,6 +362,13 @@ function Painel() {
                   ) : (
                     i.rotulo
                   )}
+                  {i.consumo && (
+                    <>
+                      <SeloConsumo nivel={i.consumo} so="ponto" className="sm:hidden" />
+                      <SeloConsumo nivel={i.consumo} className="hidden lg:inline-flex" />
+                      <SeloConsumo nivel={i.consumo} so="ponto" className="hidden sm:inline-block lg:hidden" />
+                    </>
+                  )}
                   {selo(alertas[i.id])}
                 </button>
               ))}
@@ -405,7 +413,10 @@ function Painel() {
                         }`}
                       >
                         <span>{i.icone}</span>
-                        <span className="flex-1">{i.rotulo}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block">{i.rotulo}</span>
+                          {i.consumo && <SeloConsumo nivel={i.consumo} className="mt-0.5" />}
+                        </span>
                         {selo(alertas[i.id], false)}
                       </button>
                     ))}

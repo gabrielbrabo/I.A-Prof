@@ -81,7 +81,7 @@ const SECOES: Secao[] = [
       "Marque as habilidades do plano de curso (do período e da matéria) que a atividade vai trabalhar. O plano é o mesmo das aulas (📝 Atividades › Plano de curso).",
       "Escreva como quer a atividade: tema, quantidade e tipos (marcar X, V ou F, discursiva, completar). Ex.: “8 questões de frações, 4 de marcar X, 2 V ou F e 2 discursivas”.",
       "Peça do seu jeito: imagens chamativas, letra grande, colorida, logo da escola no cabeçalho, sem nota… Use 🖼️ Adicionar imagens para mandar a logo ou figuras do seu computador.",
-      "Clique em ✨ Gerar atividade/avaliação. A I.A segue o seu pedido em cima das habilidades marcadas. Se faltar algo (ex.: a logo), ela pergunta antes.",
+      "Clique em ✨ Gerar. A I.A segue o seu pedido em cima das habilidades marcadas. Se faltar algo (ex.: a logo), ela pergunta antes.",
       "Não ficou do jeito? Use ✏️ “Quer mudar algo? Peça à I.A” (ex.: “deixe a questão 3 mais fácil”) ou edite à mão: questões, imagens, cabeçalho e letra.",
       "Confira e edite: questões, resposta certa de cada uma e o valor. Se a soma não bater com o valor total, use “Ajustar para somar”.",
       "Clique em ✓ Aprovar e salvar. Use 🖨️ Imprimir / PDF para a folha dos alunos (sem gabarito) e 🔑 para o gabarito.",

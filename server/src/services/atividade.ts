@@ -9,8 +9,11 @@ import { gerarImagens, imagensLigadas } from "./imagens";
 
 // ---------- Tipos ----------
 export type TipoQuestao = "multipla" | "vf" | "discursiva" | "completar";
+// Figuras exatas desenhadas pelo sistema (a I.A de imagem erra ponteiros, numeros e escalas):
+//  relogio "8:10" | termometro "20" | fracao "3/4" | grafico "Manha:28; Tarde:32"
+export const FIGURAS_EXATAS = ["relogio", "termometro", "fracao", "grafico"] as const;
 export interface Figura {
-  tipo: "" | "emoji" | "svg";
+  tipo: "" | "emoji" | "svg" | (typeof FIGURAS_EXATAS)[number];
   conteudo: string;
 }
 export interface Questao {
@@ -26,6 +29,7 @@ export interface Questao {
   quadro?: string; // bloco de largura fixa: grade de caca-palavras, colunas para ligar, tabela, sequencia
   imagem?: string; // id de uma imagem (enviada pelo professor ou gerada pela I.A de imagem)
   figura?: Figura; // ilustracao simples feita pela I.A (emoji ou desenho SVG)
+  sequencia?: number; // imagem em sequencia de cenas (producao de texto): quantos quadros ela tem
 }
 // Texto de apoio (leitura e interpretacao)
 export interface TextoBase {
@@ -62,6 +66,7 @@ export interface Cabecalho {
   escola: string;
   logo: string; // id da imagem do professor usada como logo ("" = sem logo)
   campos: string[]; // aluno, data, turma, professor, nota, escola
+  mascote?: string; // id da ilustracao do topo da folha (personagem do tema), gerada pela I.A
 }
 export interface Estilo {
   fonte: "normal" | "grande" | "extra";
@@ -71,6 +76,9 @@ export interface Estilo {
   imagem: "pequena" | "media" | "grande"; // tamanho das imagens
   colunas: boolean; // alternativas curtas em 2 colunas (economiza espaco)
   paginas: 0 | 1 | 2; // 1 = tudo em uma folha (a impressao encolhe ate caber); 0 = livre
+  visual: "cards" | "simples"; // cards = quadros coloridos por questao (so se o professor pedir); simples = folha limpa
+  enfeites: boolean; // estrelas e selo no titulo (so se pedir enfeites/chamativa)
+  rodape: string; // frase no rodape (so se o professor pedir uma frase)
 }
 export const CAMPOS_CABECALHO = ["escola", "professor", "turma", "aluno", "data", "nota", "serie", "periodo"];
 // serie e periodo so aparecem se o professor pedir/marcar
@@ -88,7 +96,39 @@ export function limparSvg(svg: string): string {
   if (!/xmlns=/.test(s)) s = s.replace(/^<svg/i, '<svg xmlns="http://www.w3.org/2000/svg"');
   return s;
 }
+// Valida o conteudo das figuras exatas ("" = invalido)
+export function conteudoFiguraExata(tipo: string, c: string): string {
+  const t = String(c ?? "").trim();
+  if (tipo === "relogio") {
+    const m = /^(\d{1,2})\s*[:h]\s*(\d{2})$/i.exec(t);
+    if (!m || Number(m[2]) > 59 || Number(m[1]) > 23) return "";
+    return `${Number(m[1]) % 12 || 12}:${m[2]}`;
+  }
+  if (tipo === "termometro") {
+    const v = Number(t.replace(",", ".").replace(/[^\d.-]/g, ""));
+    return t && Number.isFinite(v) && v >= -50 && v <= 60 ? String(Math.round(v)) : "";
+  }
+  if (tipo === "fracao") {
+    const m = /^(\d{1,2})\s*\/\s*(\d{1,2})$/.exec(t);
+    if (!m || Number(m[2]) < 1 || Number(m[2]) > 16 || Number(m[1]) > Number(m[2])) return "";
+    return `${Number(m[1])}/${Number(m[2])}`;
+  }
+  if (tipo === "grafico") {
+    const barras = t
+      .split(/[;\n]+/)
+      .map((p) => /^(.{1,24}?)\s*[:=]\s*(-?\d+(?:[.,]\d+)?)\s*$/.exec(p.trim()))
+      .filter((m): m is RegExpExecArray => !!m)
+      .map((m) => `${m[1].trim().replace(/[;:]/g, "")}:${Number(m[2].replace(",", "."))}`)
+      .slice(0, 8);
+    return barras.length >= 2 && barras.every((b) => Number(b.split(":")[1]) >= 0) ? barras.join("; ") : "";
+  }
+  return "";
+}
 export function limparFigura(f?: Partial<Figura> | null): Figura {
+  if (FIGURAS_EXATAS.includes(f?.tipo as never)) {
+    const c = conteudoFiguraExata(String(f!.tipo), String(f?.conteudo ?? ""));
+    return c ? { tipo: f!.tipo as Figura["tipo"], conteudo: c } : { tipo: "", conteudo: "" };
+  }
   const tipo = f?.tipo === "emoji" || f?.tipo === "svg" ? f.tipo : "";
   if (tipo === "emoji") return { tipo, conteudo: String(f?.conteudo ?? "").slice(0, 60) };
   if (tipo === "svg") {
@@ -192,12 +232,22 @@ SEJA FIEL AO PROFESSOR — a atividade deve ficar exatamente do jeito que ele pe
 Imagens e figuras:
 - NUNCA use emojis (nem no texto, nem no enunciado, nem nas alternativas, nem em "figura") a menos que o professor PEÇA emojis. Sem pedido de imagem: nada de figura, nada de emoji.
 - "ilustracao" de cada questão (e do texto): quando o professor pedir IMAGENS/figuras/desenhos/ilustrações, descreva em português, em uma frase concreta, a ilustração que deve ser desenhada para aquela questão (ex.: "três maçãs vermelhas em cima de uma mesa", "um menino lendo um livro embaixo de uma árvore"). Ela vira uma imagem de verdade. Coloque em TODAS ou quase todas as questões. Nunca peça texto escrito dentro da imagem. Para questões de contagem, diga a quantidade exata. Sem pedido de imagem: "".
-- "figura": deixe {"tipo":"","conteudo":""}. Só use {"tipo":"emoji",...} se o professor pedir emojis; e {"tipo":"svg","conteudo":"<svg ...>…</svg>"} (desenho simples, no máximo 1500 caracteres, no máximo 4 por atividade) só se ele pedir imagens e "Gerar imagens de verdade" for "não disponível".
+- FIGURAS EXATAS (desenhadas pelo sistema, sem custo, sempre certas — use mesmo SEM pedido de imagem quando a questão precisar): relógio de ponteiros {"tipo":"relogio","conteudo":"8:10"}; termômetro {"tipo":"termometro","conteudo":"20"} (graus °C, de -50 a 60); fração em círculo {"tipo":"fracao","conteudo":"3/4"}; gráfico de barras {"tipo":"grafico","conteudo":"Manhã:28; Tarde:32; Noite:18"} (2 a 8 barras, rótulos curtos). Use em leitura de horas, temperatura, frações e gráficos. NUNCA peça relógio, termômetro, gráfico, régua ou números na "ilustracao" (a I.A de imagem erra ponteiros e números); use a figura exata e, se quiser, uma "ilustracao" de cena ao lado (ex.: uma menina olhando o relógio de pulso).
+- "figura" nos outros casos: deixe {"tipo":"","conteudo":""}. Só use {"tipo":"emoji",...} se o professor pedir emojis; e {"tipo":"svg","conteudo":"<svg ...>…</svg>"} (desenho simples, no máximo 1500 caracteres, no máximo 4 por atividade) só se ele pedir imagens e "Gerar imagens de verdade" for "não disponível".
+- "cenas" de cada questão: SÓ em produção de texto com imagens ("observe as imagens e escreva uma história", sequência de cenas, tirinha): 3 a 5 descrições curtas, uma por cena, na ordem da história, descrevendo os personagens SEMPRE do mesmo jeito em todas (ex.: "menino de boné azul e camiseta vermelha com um filhote beagle"). Vira uma faixa de quadros numerados. Nesses casos deixe "ilustracao" vazia. Nos outros: [].
+- "ilustracaoCapa": SÓ se o professor pedir imagens E um personagem/mascote/desenho no topo (ou atividade "bem chamativa/decorada" com imagens): descreva um personagem infantil ligado ao tema (ex.: "menina de óculos estudando com um livro aberto e números coloridos ao redor"). Senão "".
 - "imagem" de cada questão: o id de uma imagem ENVIADA pelo professor (lista "Imagens do professor") quando ele pedir para usá-la na questão; senão "".
 - "cabecalho.logo": id da imagem enviada que é a logo/brasão da escola, se o professor pedir para colocar no cabeçalho; senão "".
 - "cabecalho.escola": nome da escola, se o professor informar; senão "".
 - "cabecalho.campos": quais linhas o cabeçalho mostra, entre: escola, professor, turma, aluno, data, nota, serie, periodo. Padrão: escola, professor, turma, aluno, data, nota. "serie" (ano escolar) e "periodo" (bimestre/trimestre) SÓ se o professor pedir. Siga o pedido (ex.: "sem nota" → tire "nota").
 - "estilo.fonte": "normal", "grande" ou "extra" (letra grande para educação infantil / 1º ano ou se o professor pedir). "estilo.colorido": true se pedir colorida/chamativa.
+- O VISUAL DA FOLHA SEGUE O PEDIDO. Nada de enfeite que o professor não pediu:
+  - "estilo.visual": "cards" (cada questão num quadro colorido com o número em destaque) SÓ se ele pedir colorida, caprichada, chamativa, bonita, em quadros/caixinhas, ilustrada, "igual às atividades da internet/Pinterest", ou se as preferências dele mostrarem esse visual. Senão "simples" (folha limpa e organizada).
+  - "estilo.enfeites": true SÓ se pedir enfeites, estrelinhas, decorada, bem chamativa. Senão false.
+  - "estilo.rodape": a frase do rodapé SÓ se o professor pedir uma frase/mensagem no rodapé (use o texto dele, ou crie uma frase curta de incentivo se ele pedir "uma frase de incentivo"). Senão "".
+  - Imagens: só com pedido de imagens; "sem imagem" = nenhuma ilustração, nenhuma cena, nenhum personagem e nenhuma figura (faça questões que não dependam de figura).
+
+PADRÃO DE QUALIDADE (vale em QUALQUER visual, com ou sem imagem — é o conteúdo que precisa ser excelente, como as atividades caprichadas que as professoras compartilham): título forte e direto ("Avaliação de Matemática", "Produção de Texto"); cada questão com contexto do dia a dia da criança (padaria, escola, passeio, previsão do tempo, brinquedos); números e dados claros no enunciado; alternativas curtas e plausíveis; comandos variados (observe, marque, ligue, complete, escreva, cite); em avaliações, misture objetivas e abertas e termine com uma questão de resposta pessoal ou produção curta. Com imagens pedidas: cada questão com sua ilustração concreta (quantidades certas), relógio/termômetro/gráfico/fração como figura exata.
 
 Quando FALTAR algo que o professor pediu e só ele pode dar (ex.: pediu a logo da escola no cabeçalho mas não enviou nenhuma imagem; pediu "o texto que trabalhamos" sem mandar o texto; pediu o nome da escola sem dizer qual), devolva "status":"perguntas" com as perguntas curtas e diretas em "perguntas" (e o resto pode vir vazio). Se der para fazer tudo, devolva "status":"pronta" e "perguntas": [].
 Se houver "Respostas do professor", use-as.
@@ -248,12 +298,13 @@ const SCHEMA_ATIVIDADE = {
           quadro: { type: "string" },
           figura: {
             type: "object",
-            properties: { tipo: { type: "string", enum: ["", "emoji", "svg"] }, conteudo: { type: "string" } },
+            properties: { tipo: { type: "string", enum: ["", "emoji", "svg", "relogio", "termometro", "fracao", "grafico"] }, conteudo: { type: "string" } },
             required: ["tipo", "conteudo"],
             additionalProperties: false,
           },
+          cenas: { type: "array", items: { type: "string" } },
         },
-        required: ["tipo", "enunciado", "alternativas", "itens", "resposta", "criterios", "valor", "imagem", "ilustracao", "linhas", "quadro", "figura"],
+        required: ["tipo", "enunciado", "alternativas", "itens", "resposta", "criterios", "valor", "imagem", "ilustracao", "linhas", "quadro", "figura", "cenas"],
         additionalProperties: false,
       },
     },
@@ -286,12 +337,16 @@ const SCHEMA_ATIVIDADE = {
         imagem: { type: "string", enum: ["pequena", "media", "grande"] },
         colunas: { type: "boolean" },
         paginas: { type: "integer", enum: [0, 1, 2] },
+        visual: { type: "string", enum: ["cards", "simples"] },
+        enfeites: { type: "boolean" },
+        rodape: { type: "string" },
       },
-      required: ["fonte", "colorido", "caixaAlta", "layout", "imagem", "colunas", "paginas"],
+      required: ["fonte", "colorido", "caixaAlta", "layout", "imagem", "colunas", "paginas", "visual", "enfeites", "rodape"],
       additionalProperties: false,
     },
+    ilustracaoCapa: { type: "string" },
   },
-  required: ["status", "perguntas", "titulo", "instrucoes", "texto", "habilidades", "questoes", "cabecalho", "estilo"],
+  required: ["status", "perguntas", "titulo", "instrucoes", "texto", "habilidades", "questoes", "cabecalho", "estilo", "ilustracaoCapa"],
   additionalProperties: false,
 };
 
@@ -373,7 +428,7 @@ async function revisarPedido(p: { pedido: string; ajuste?: string | null; respos
       texto: a.texto,
       cabecalho: a.cabecalho,
       estilo: a.estilo,
-      questoes: (a.questoes ?? []).map((q) => ({ tipo: q.tipo, enunciado: q.enunciado, alternativas: q.alternativas, itens: q.itens, resposta: q.resposta, linhas: q.linhas, quadro: q.quadro, temImagem: !!(q.ilustracao || q.imagem) })),
+      questoes: (a.questoes ?? []).map((q) => ({ tipo: q.tipo, enunciado: q.enunciado, alternativas: q.alternativas, itens: q.itens, resposta: q.resposta, linhas: q.linhas, quadro: q.quadro, temImagem: !!(q.ilustracao || q.imagem || (q as { cenas?: string[] }).cenas?.length), figura: (q as { figura?: { tipo?: string } }).figura?.tipo || "" })),
     };
     const r = await chamarJsonOpenAI<{ faltando: string[] }>({
       system:
@@ -458,7 +513,7 @@ export async function gerarAtividade(p: {
   partes.push(`LEMBRE: a atividade tem que atender exatamente ao pedido do professor${p.ajuste?.trim() ? " e ao ajuste" : ""}. Confira cada item antes de devolver.`);
   blocos.push({ type: "input_text", text: partes.join("\n\n") });
 
-  type QuestaoIA = Questao & { ilustracao?: string };
+  type QuestaoIA = Questao & { ilustracao?: string; cenas?: string[] };
   type Resp = {
     status: "pronta" | "perguntas";
     perguntas: string[];
@@ -469,6 +524,7 @@ export async function gerarAtividade(p: {
     questoes: QuestaoIA[];
     cabecalho: Cabecalho;
     estilo: Estilo;
+    ilustracaoCapa?: string;
   };
   const chamar = (extra?: string) =>
     // Gerar e ajustar atividades: so OpenAI (GPT)
@@ -515,7 +571,12 @@ export async function gerarAtividade(p: {
       l.alternativas = l.alternativas.map(semEmoji);
       l.itens = l.itens.map((it) => ({ ...it, texto: semEmoji(it.texto) }));
     }
-    if (p.ajuste && !l.imagem && !String(q.ilustracao ?? "").trim() && !pediuTirar && atuais[i]?.imagem) l.imagem = String(atuais[i].imagem);
+    const cenasNovas = (q.cenas ?? []).map((c) => String(c).trim()).filter(Boolean);
+    l.sequencia = 0; // a I.A manda descricoes das cenas; a imagem da sequencia e gerada abaixo
+    if (p.ajuste && !l.imagem && !String(q.ilustracao ?? "").trim() && !cenasNovas.length && !pediuTirar && atuais[i]?.imagem) {
+      l.imagem = String(atuais[i].imagem);
+      l.sequencia = Number(atuais[i].sequencia) || 0;
+    }
     if (l.imagem && !ids.includes(l.imagem)) l.imagem = "";
     if (l.figura?.tipo === "svg" && ++svgs > 6) l.figura = { tipo: "", conteudo: "" };
     return l;
@@ -539,27 +600,69 @@ export async function gerarAtividade(p: {
     { titulo: semEmoji(textoPuro(r.texto?.titulo)), conteudo: semEmoji(textoPuro(r.texto?.conteudo)), imagem: pediuTirar ? "" : imagemTextoAtual, posicao: r.texto?.posicaoImagem },
     ids
   );
-  if (imagensLigadas()) {
-    const pedidos: Array<{ alvo: number; descricao: string }> = []; // alvo -1 = texto
-    const descTexto = String(r.texto?.ilustracao ?? "").trim();
-    if (texto.conteudo && descTexto) pedidos.push({ alvo: -1, descricao: descTexto });
-    brutas.forEach((q, i) => {
-      const d = String(q.ilustracao ?? "").trim();
-      // imagem do professor fica; imagem gerada pela I.A e refeita quando vem descricao nova (ex.: "melhore as imagens")
-      const imagemDoProfessor = !!questoes[i].imagem && !String(questoes[i].imagem).startsWith("ia");
-      if (d && !imagemDoProfessor) pedidos.push({ alvo: i, descricao: d });
+  // Do jeito que foi pedido: "sem imagem" tira ilustracoes, cenas, personagem e figuras; sem pedido de imagem, sem personagem
+  const pedidoTodo = `${p.detalhes} ${p.respostas ?? ""} ${p.ajuste ?? ""}`;
+  const SEM_IMG = /sem (nenhuma )?(imag|figur|ilustr|desenh)|n[aã]o (coloque|ponha|use|quero) (imag|figur|ilustr|desenh)/i;
+  // no ajuste, o pedido novo vence ("coloque imagens" depois de uma atividade sem imagem)
+  const ajustePedeImagem = !!p.ajuste && /(coloque|ponha|adicione|inclua|com|use|gere) (as |umas |mais )?(imag|figur|ilustr|desenh)/i.test(p.ajuste) && !SEM_IMG.test(p.ajuste);
+  const semImagem = !ajustePedeImagem && SEM_IMG.test(pedidoTodo);
+  const pediuImagem = !semImagem && /imag|figur|ilustr|desenh|personag|mascote/i.test(pedidoTodo);
+  if (semImagem) {
+    brutas.forEach((q) => ((q.ilustracao = ""), (q.cenas = [])));
+    r.ilustracaoCapa = "";
+    if (r.texto) r.texto.ilustracao = "";
+    questoes.forEach((q) => {
+      if (q.figura?.tipo) q.figura = { tipo: "", conteudo: "" };
+      if (String(q.imagem).startsWith("ia")) (q.imagem = ""), (q.sequencia = 0);
     });
+  }
+  if (!pediuImagem && !(p.ajuste && /personag|mascote|topo/i.test(p.ajuste))) r.ilustracaoCapa = "";
+  // visual em quadros coloridos e enfeites: so se o professor pediu (agora, antes nesta atividade ou nas preferencias aprovadas)
+  const atualEstilo = (p.atual as { estilo?: Partial<Estilo> } | null)?.estilo;
+  if (r.estilo) {
+    const querCards = /colorid|caprich|chamativ|bonit|quadr|caixinh|ilustrad|pinterest|internet|decorad|enfeit|cards/i.test(pedidoTodo) || /visual cards/.test(p.preferencias ?? "") || (!!p.ajuste && atualEstilo?.visual === "cards");
+    if (!querCards) r.estilo.visual = "simples";
+    const querEnfeites = /enfeit|estrel|decorad|chamativ/i.test(pedidoTodo) || /estilo\.enfeites/.test(p.preferencias ?? "") || (!!p.ajuste && !!atualEstilo?.enfeites);
+    if (!querEnfeites) r.estilo.enfeites = false;
+    if (p.ajuste && /simples|sem (quadro|cor|enfeite)|preto e branco|economi[zs]ar tinta/i.test(p.ajuste)) r.estilo.visual = "simples";
+  }
+  // frase no rodape so com pedido
+  if (r.estilo && !/rodap|frase|mensagem|incentiv|motiva/i.test(pedidoTodo)) r.estilo.rodape = (p.atual as { estilo?: { rodape?: string } } | null)?.estilo?.rodape ?? "";
+
+  // Ilustracao do topo (personagem do tema): no ajuste, mantem a atual se nao vier outra
+  const mascoteAtual = String((p.atual as { cabecalho?: { mascote?: string } } | null)?.cabecalho?.mascote ?? "");
+  let mascote = pediuTirar || semImagem ? "" : mascoteAtual;
+  if (imagensLigadas()) {
+    // alvo: -1 = texto, -2 = topo da folha, i = questao. Questoes primeiro (se passar do limite, o enfeite do topo fica de fora)
+    const pedidos: Array<{ alvo: number; descricao: string; tipo: "cena" | "sequencia" | "capa"; quadros?: number }> = [];
+    brutas.forEach((q, i) => {
+      const imagemDoProfessor = !!questoes[i].imagem && !String(questoes[i].imagem).startsWith("ia");
+      if (imagemDoProfessor) return; // imagem do professor fica
+      const cenas = (q.cenas ?? []).map((c) => String(c).trim()).filter(Boolean).slice(0, 5);
+      const d = String(q.ilustracao ?? "").trim();
+      // producao de texto: uma faixa com as cenas em ordem (mesmos personagens em todos os quadros)
+      if (cenas.length >= 2) pedidos.push({ alvo: i, descricao: cenas.map((c, k) => `Quadro ${k + 1}: ${c.slice(0, 220)}`).join(" "), tipo: "sequencia", quadros: cenas.length });
+      // imagem gerada pela I.A e refeita quando vem descricao nova (ex.: "melhore as imagens")
+      else if (d) pedidos.push({ alvo: i, descricao: d.slice(0, 400), tipo: "cena" });
+    });
+    const descTexto = String(r.texto?.ilustracao ?? "").trim();
+    if (texto.conteudo && descTexto) pedidos.push({ alvo: -1, descricao: descTexto.slice(0, 400), tipo: "cena" });
+    const descCapa = String(r.ilustracaoCapa ?? "").trim();
+    if (descCapa && !(p.ajuste && mascote && !/topo|personagem|mascote|enfeite|capa/i.test(p.ajuste))) pedidos.push({ alvo: -2, descricao: descCapa.slice(0, 300), tipo: "capa" });
     const lote = pedidos.slice(0, Math.max(0, env.imagemMax));
-    const geradas = await gerarImagens(lote.map((x) => x.descricao.slice(0, 400)), nomeAno(p.ano));
+    const geradas = await gerarImagens(lote, nomeAno(p.ano));
     lote.forEach((x, k) => {
       const dataUrl = geradas[k];
       if (!dataUrl) return; // falhou: a questao fica sem imagem
       const id = `ia${imagensIA.length + 1}-${Date.now().toString(36)}`;
       imagensIA.push({ id, nome: `I.A: ${x.descricao.slice(0, 30)}`, dataUrl });
       if (x.alvo === -1) texto.imagem = id;
+      else if (x.alvo === -2) mascote = id;
       else {
         questoes[x.alvo].imagem = id;
-        questoes[x.alvo].figura = { tipo: "", conteudo: "" };
+        questoes[x.alvo].sequencia = x.tipo === "sequencia" ? x.quadros ?? 0 : 0;
+        // figura exata (relogio, termometro...) fica junto da ilustracao; emoji/svg sai
+        if (!FIGURAS_EXATAS.includes(questoes[x.alvo].figura?.tipo as never)) questoes[x.alvo].figura = { tipo: "", conteudo: "" };
       }
     });
   }
@@ -573,7 +676,7 @@ export async function gerarAtividade(p: {
     semNota: !!p.semNota,
     habilidades: escolhidas,
     usouPlano: escolhidas.length > 0,
-    cabecalho: limparCabecalho({ ...r.cabecalho, escola: r.cabecalho?.escola || p.escola || "" }, ids),
+    cabecalho: limparCabecalho({ ...r.cabecalho, escola: r.cabecalho?.escola || p.escola || "", mascote }, [...ids, ...imagensIA.map((i) => i.id), ...(mascote ? [mascote] : [])]),
     estilo: limparEstilo(r.estilo, p.ano),
     imagensIA,
   };
@@ -585,6 +688,7 @@ export function limparCabecalho(c: Partial<Cabecalho> | null | undefined, ids: s
     escola: String(c?.escola ?? "").trim().slice(0, 150),
     logo: c?.logo && ids.includes(String(c.logo)) ? String(c.logo) : "",
     campos: campos.length ? [...new Set(campos)] : CAMPOS_PADRAO,
+    mascote: c?.mascote && ids.includes(String(c.mascote)) ? String(c.mascote) : "",
   };
 }
 // Letra minima pela idade: educacao infantil e 1º ano = bem grande; 2º e 3º ano = grande
@@ -609,6 +713,9 @@ export function limparEstilo(e: Partial<Estilo> | null | undefined, ano?: string
     imagem: e?.imagem === "pequena" || e?.imagem === "grande" ? e.imagem : "media",
     colunas: !!e?.colunas,
     paginas,
+    visual: e?.visual === "cards" ? "cards" : "simples",
+    enfeites: !!e?.enfeites,
+    rodape: textoPuro(e?.rodape).replace(/\s+/g, " ").slice(0, 160),
   };
 }
 export function limparTexto(t: Partial<TextoBase> | null | undefined, ids: string[]): TextoBase {
@@ -656,6 +763,7 @@ export function limparQuestao(q: Partial<Questao>): Questao {
     figura: limparFigura(q.figura),
     linhas: Math.max(0, Math.min(30, Math.round(Number(q.linhas) || 0))),
     quadro: limparQuadro(q.quadro),
+    sequencia: q.imagem ? Math.max(0, Math.min(5, Math.round(Number(q.sequencia) || 0))) : 0,
   };
 }
 

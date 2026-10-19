@@ -191,7 +191,14 @@ export default function Assinatura({
           <p className="text-sm font-semibold text-slate-700">{assinante ? "Mudar de plano" : "Escolha seu plano"}</p>
           <div className="flex gap-1 rounded-lg bg-slate-100 p-1 text-sm">
             {(["mensal", "anual"] as const).map((c) => (
-              <button key={c} onClick={() => setCiclo(c)} className={`rounded-md px-3 py-1 ${ciclo === c ? "bg-white font-semibold text-indigo-700 shadow-sm" : "text-slate-500"}`}>
+              <button
+                key={c}
+                onClick={() => {
+                  setCiclo(c);
+                  // o plano escolhido virou o plano atual neste ciclo: fecha o pagamento
+                  if (assinante && escolhido === s?.planoId && (a?.ciclo === "anual" ? "anual" : "mensal") === c) setEscolhido(null);
+                }}
+                className={`rounded-md px-3 py-1 ${ciclo === c ? "bg-white font-semibold text-indigo-700 shadow-sm" : "text-slate-500"}`}>
                 {c === "mensal" ? "Mensal" : "Anual (2 meses grátis)"}
               </button>
             ))}
@@ -199,7 +206,13 @@ export default function Assinatura({
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           {planos.map((p) => {
-            const atual = assinante && s?.planoId === p.id;
+            // mesmo plano: so bloqueia o mesmo ciclo; do mensal pode migrar para o anual quando quiser
+            const mesmoPlano = assinante && s?.planoId === p.id;
+            const cicloAtual = a?.ciclo === "anual" ? "anual" : "mensal";
+            const atual = mesmoPlano && cicloAtual === ciclo;
+            const virarAnual = mesmoPlano && cicloAtual === "mensal" && ciclo === "anual";
+            const jaAnual = mesmoPlano && cicloAtual === "anual" && ciclo === "mensal";
+            const bloqueado = atual || jaAnual;
             return (
               <div
                 key={p.id}
@@ -220,13 +233,13 @@ export default function Assinatura({
                   ))}
                 </ul>
                 <button
-                  disabled={atual}
+                  disabled={bloqueado}
                   onClick={() => setEscolhido(p.id)}
                   className={`mt-4 rounded-lg py-2 text-sm font-semibold ${
-                    atual ? "bg-slate-100 text-slate-400" : p.destaque ? "bg-indigo-600 text-white hover:bg-indigo-700" : "bg-slate-800 text-white hover:bg-slate-900"
+                    bloqueado ? "bg-slate-100 text-slate-400" : p.destaque ? "bg-indigo-600 text-white hover:bg-indigo-700" : "bg-slate-800 text-white hover:bg-slate-900"
                   }`}
                 >
-                  {atual ? "Seu plano atual" : "Assinar"}
+                  {atual ? "Seu plano atual" : jaAnual ? "Você já tem o anual" : virarAnual ? "Mudar para o anual" : "Assinar"}
                 </button>
               </div>
             );

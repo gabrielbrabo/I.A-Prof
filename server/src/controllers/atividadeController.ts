@@ -33,7 +33,7 @@ const gerarSchema = z.object({
   // habilidades do plano de curso escolhidas pelo professor (codigos)
   habilidades: z.array(z.string().max(30)).max(10).default([]),
   // imagens do professor (miniaturas para a I.A saber o que e cada uma)
-  imagens: z.array(z.object({ id: z.string().max(40), nome: z.string().max(80), dataUrl: z.string().max(400_000) })).max(20).default([]),
+  imagens: z.array(z.object({ id: z.string().max(40), nome: z.string().max(80), dataUrl: z.string().max(400_000) })).max(30).default([]),
   respostas: z.string().max(3000).nullish(), // respostas as perguntas da I.A
   atual: z.record(z.unknown()).nullish(), // atividade ja gerada (ajuste)
   ajuste: z.string().max(1500).nullish(), // o que mudar
@@ -85,7 +85,8 @@ const questaoSchema = z.object({
   imagem: z.string().max(40).default(""),
   linhas: z.number().int().min(0).max(30).default(0),
   quadro: z.string().max(3000).default(""),
-  figura: z.object({ tipo: z.enum(["", "emoji", "svg"]), conteudo: z.string().max(8000) }).default({ tipo: "", conteudo: "" }),
+  figura: z.object({ tipo: z.enum(["", "emoji", "svg", "relogio", "termometro", "fracao", "grafico"]), conteudo: z.string().max(8000) }).default({ tipo: "", conteudo: "" }),
+  sequencia: z.number().int().min(0).max(5).default(0),
 });
 const salvarSchema = z.object({
   // ajustes pedidos a I.A nesta atividade: so viram aprendizado quando o professor aprova e salva
@@ -108,8 +109,8 @@ const salvarSchema = z.object({
   questoes: z.array(questaoSchema).min(1, "A atividade precisa de pelo menos uma questão").max(30),
   habilidades: z.array(z.object({ codigo: z.string(), habilidade: z.string() })).max(10).default([]),
   valorTotal: z.number().min(0.5).max(1000),
-  imagens: z.array(z.object({ id: z.string().max(40), nome: z.string().max(80), dataUrl: z.string().max(1_500_000) })).max(20).default([]),
-  cabecalho: z.object({ escola: z.string().max(150), logo: z.string().max(40), campos: z.array(z.string()).max(8) }).nullish(),
+  imagens: z.array(z.object({ id: z.string().max(40), nome: z.string().max(80), dataUrl: z.string().max(1_500_000) })).max(30).default([]),
+  cabecalho: z.object({ escola: z.string().max(150), logo: z.string().max(40), campos: z.array(z.string()).max(8), mascote: z.string().max(40).default("") }).nullish(),
   estilo: z
     .object({
       fonte: z.enum(["normal", "grande", "extra"]),
@@ -119,6 +120,9 @@ const salvarSchema = z.object({
       imagem: z.enum(["pequena", "media", "grande"]).default("media"),
       colunas: z.boolean().default(false),
       paginas: z.union([z.literal(0), z.literal(1), z.literal(2)]).default(0),
+      visual: z.enum(["cards", "simples"]).default("simples"),
+      enfeites: z.boolean().default(false),
+      rodape: z.string().max(300).default(""),
     })
     .nullish(),
   texto: z.object({ titulo: z.string().max(200), conteudo: z.string().max(8000), imagem: z.string().max(40), posicao: z.enum(["topo", "direita", "esquerda"]).default("topo") }).nullish(),

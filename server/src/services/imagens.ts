@@ -26,17 +26,38 @@ function custoUsd(modelo: string, uso?: Uso) {
   return tabela[env.imagemQualidade] ?? tabela.medium;
 }
 
-// Estilo fixo: desenho infantil limpo, fundo branco, SEM texto (I.A de imagem erra letras)
-function promptDaImagem(descricao: string, serie: string) {
+// Pedido de imagem: cena de uma questao, faixa de cenas (producao de texto) ou personagem do topo da folha
+export type PedidoImagem = string | { descricao: string; tipo?: "cena" | "sequencia" | "capa"; quadros?: number };
+
+// Estilo fixo (o mesmo das atividades caprichadas das professoras): cartoon infantil, contorno preto, cores vivas, SEM texto
+const ESTILO =
+  "Estilo: ilustração infantil de livro didático brasileiro, cartoon fofo, contornos pretos bem definidos, cores vivas e alegres, personagens com olhos grandes e expressões simpáticas, traço limpo e alta nitidez, sem sombras pesadas.";
+const SEM_TEXTO = "Sem nenhum texto, letra, número, balão de fala ou palavra escrita na imagem. Sem marca d'água. Apropriado para crianças.";
+function promptDaImagem(p: Exclude<PedidoImagem, string>, serie: string) {
+  if (p.tipo === "sequencia") {
+    const n = p.quadros ?? 4;
+    return [
+      `Tirinha para uma produção de texto de ${serie}: ${n} quadros lado a lado em UMA linha, todos do mesmo tamanho, cada um com moldura de cantos arredondados e separados por uma faixa branca, contando a história em ordem da esquerda para a direita.`,
+      p.descricao + ".",
+      "Os mesmos personagens, com exatamente a mesma aparência, roupas e cores em todos os quadros. Cenário simples e claro.",
+      ESTILO,
+      SEM_TEXTO,
+    ].join(" ");
+  }
+  if (p.tipo === "capa") {
+    return [`Personagem para enfeitar o topo de uma atividade escolar de ${serie}.`, `Mostre: ${p.descricao}.`, "Personagem isolado, sem cenário, sobre fundo branco liso, ocupando bem o quadro.", ESTILO, SEM_TEXTO].join(" ");
+  }
   return [
-    `Ilustração para uma atividade escolar impressa de ${serie}.`,
-    `Mostre: ${descricao}.`,
-    "Estilo: ilustração infantil de livro didático, colorida e alegre, cores vivas, traço limpo com contornos bem definidos, alta nitidez, composição centralizada ocupando bem o quadro, fundo branco liso, sem sombras pesadas.",
-    "Sem nenhum texto, letra, número ou palavra escrita na imagem. Sem marca d'água. Apropriado para crianças.",
+    `Ilustração para uma questão de atividade escolar impressa de ${serie}.`,
+    `Mostre: ${p.descricao}.`,
+    "Composição centralizada ocupando bem o quadro, fundo branco liso (ou cenário simples e claro quando a cena pedir).",
+    ESTILO,
+    SEM_TEXTO,
   ].join(" ");
 }
 
-export async function gerarImagem(descricao: string, serie: string): Promise<string> {
+export async function gerarImagem(pedido: PedidoImagem, serie: string): Promise<string> {
+  const p = typeof pedido === "string" ? { descricao: pedido } : pedido;
   if (!imagensLigadas()) throw new Error("Geração de imagens não configurada (OPENAI_API_KEY).");
   const pedir = async (modelo: string, compacta: number) => {
     const resp = await fetch("https://api.openai.com/v1/images/generations", {
@@ -44,8 +65,8 @@ export async function gerarImagem(descricao: string, serie: string): Promise<str
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.openaiKey}` },
       body: JSON.stringify({
         model: modelo,
-        prompt: promptDaImagem(descricao, serie),
-        size: "1024x1024",
+        prompt: promptDaImagem(p, serie),
+        size: p.tipo === "sequencia" ? "1536x1024" : "1024x1024", // faixa de cenas: deitada
         quality: env.imagemQualidade,
         ...(compacta === 2 ? { output_format: "jpeg", output_compression: 70 } : compacta === 1 ? { output_format: "jpeg" } : {}), // jpeg ~100 KB: cabe na atividade salva
         n: 1,
@@ -75,7 +96,7 @@ export async function gerarImagem(descricao: string, serie: string): Promise<str
 }
 
 // Gera varias ao mesmo tempo (no maximo `simultaneas` por vez). Falhas viram null (a questao fica com o emoji/desenho).
-export async function gerarImagens(descricoes: string[], serie: string, simultaneas = 4): Promise<Array<string | null>> {
+export async function gerarImagens(descricoes: PedidoImagem[], serie: string, simultaneas = 4): Promise<Array<string | null>> {
   const saida: Array<string | null> = new Array(descricoes.length).fill(null);
   let proxima = 0;
   async function trabalhador() {

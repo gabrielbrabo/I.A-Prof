@@ -20,9 +20,10 @@ const questaoSchema = new Schema({
   linhas: { type: Number, default: 0 }, // linhas para resposta (0 = automatico)
   quadro: { type: String, default: "" }, // caca-palavras, colunas para ligar, tabela (largura fixa)
   figura: {
-    tipo: { type: String, enum: ["", "emoji", "svg"], default: "" }, // ilustracao feita pela I.A
+    tipo: { type: String, enum: ["", "emoji", "svg", "relogio", "termometro", "fracao", "grafico"], default: "" }, // ilustracao feita pela I.A / figura exata
     conteudo: { type: String, default: "" },
   },
+  sequencia: { type: Number, default: 0 }, // imagem com N cenas em sequencia (producao de texto)
 });
 
 const atividadeSchema = new Schema(
@@ -52,6 +53,7 @@ const atividadeSchema = new Schema(
       escola: { type: String, default: "" },
       logo: { type: String, default: "" }, // id da imagem usada como logo
       campos: { type: [String], default: ["escola", "professor", "turma", "aluno", "data", "nota"] },
+      mascote: { type: String, default: "" }, // id da ilustracao do topo da folha
     },
     estilo: {
       fonte: { type: String, enum: ["normal", "grande", "extra"], default: "normal" },
@@ -61,6 +63,9 @@ const atividadeSchema = new Schema(
       imagem: { type: String, enum: ["pequena", "media", "grande"], default: "media" },
       colunas: { type: Boolean, default: false },
       paginas: { type: Number, default: 0 }, // 1 = tudo em uma folha
+      visual: { type: String, enum: ["cards", "simples"], default: "simples" }, // cards = quadros coloridos (se o professor pedir); simples = folha limpa
+      enfeites: { type: Boolean, default: false }, // estrelas e selo no titulo
+      rodape: { type: String, default: "" }, // frase no rodape (so se pedir)
     },
     // Texto de apoio (leitura e interpretacao)
     texto: {

@@ -1,6 +1,7 @@
+import SeloConsumo from "../SeloConsumo";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { gravarRascunhoAtividade, lerRascunhoAtividade, RascunhoAtividade } from "../../lib/rascunhoAtividade";
-import { Atividade, atividadesApi, ImagemAtividade, miniatura, PontosPeriodo, Questao, reduzirFoto, TIPOS_DEV, TipoDev, Turma, turmasApi } from "../../api/atividades";
+import { Atividade, atividadesApi, ImagemAtividade, miniatura, PontosPeriodo, Questao, reduzirFoto, semImagensSobrando, TIPOS_DEV, TipoDev, Turma, turmasApi } from "../../api/atividades";
 import { diarioApi, nomeTurmaDiario, SituacaoDiario, TurmaDiario } from "../../api/diario";
 import { planoApi, PlanoCurso } from "../../api/planoCurso";
 import { ANOS } from "../../lib/formatarRegistro";
@@ -353,7 +354,9 @@ function GerarAtividadeTela({
     else setGerando(true);
     try {
       // a I.A ve so miniaturas das imagens (mais rapido e barato); a imagem inteira fica na atividade
-      const miniaturas = await Promise.all(imgs.map(async (i) => ({ ...i, dataUrl: await miniatura(i.dataUrl).catch(() => i.dataUrl) })));
+      // ajuste: imagens em uso; atividade nova: so as do professor (as da I.A anterior saem)
+      const imgsBase = modo === "ajuste" && atividade ? semImagensSobrando(atividade).imagens ?? [] : imgs.filter((i) => !i.id.startsWith("ia"));
+      const miniaturas = await Promise.all(imgsBase.map(async (i) => ({ ...i, dataUrl: await miniatura(i.dataUrl).catch(() => i.dataUrl) })));
       const atual =
         modo === "ajuste" && atividade
           ? { titulo: atividade.titulo, instrucoes: atividade.instrucoes, texto: atividade.texto, questoes: atividade.questoes, cabecalho: atividade.cabecalho, estilo: atividade.estilo }
@@ -393,7 +396,7 @@ function GerarAtividadeTela({
         instrucoes: r.instrucoes,
         questoes: r.questoes,
         habilidades: r.habilidades,
-        imagens: [...imgs, ...(r.imagensIA ?? [])],
+        imagens: [...imgsBase, ...(r.imagensIA ?? [])],
         cabecalho: r.cabecalho,
         estilo: r.estilo,
         texto: r.texto,
@@ -500,6 +503,16 @@ function GerarAtividadeTela({
     origem,
     semNota: !valeNota,
   });
+
+  // "Editar a mao": abre o editor e a parte de cabecalho/aparencia (logo, letra, tamanho das imagens)
+  function irEditarMao() {
+    const ed = document.getElementById("editor-mao") as HTMLDetailsElement | null;
+    if (!ed) return;
+    ed.open = true;
+    const ap = document.getElementById("editor-aparencia") as HTMLDetailsElement | null;
+    if (ap) ap.open = true;
+    (ap ?? ed).scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   const problemas = useMemo(() => (atividade ? problemasGabarito(atividade.questoes) : []), [atividade]);
 
@@ -625,8 +638,8 @@ function GerarAtividadeTela({
           </div>
           {erro && <p className="rounded-lg bg-rose-50 px-4 py-2.5 text-sm text-rose-700">{erro}</p>}
           {aviso && <p className="rounded-lg bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">{aviso}</p>}
-          {!ehExterna && <CaixaAjuste valor={ajuste} onChange={setAjuste} onAjustar={() => gerar("ajuste")} ajustando={ajustando} />}
-          <details className="rounded-xl bg-white/60 p-2" open>
+          {!ehExterna && <CaixaAjuste valor={ajuste} onChange={setAjuste} onAjustar={() => gerar("ajuste")} ajustando={ajustando} onEditarMao={irEditarMao} />}
+          <details id="editor-mao" className="rounded-xl bg-white/60 p-2" open>
             <summary className="cursor-pointer px-1 text-sm font-semibold text-slate-700" data-tour="ativ-editar">✍️ Editar à mão (questões, gabarito, valores, imagens, cabeçalho)</summary>
             <div className="mt-3">
               <EditorAtividade valor={atividade} onChange={setAtividade} />
@@ -999,14 +1012,20 @@ function GerarAtividadeTela({
           <span className="text-[11px] text-slate-400">
             {detalhes.length}/{LIMITE_DETALHES} · Diga o tema, a quantidade e os tipos de questão (marcar X, V ou F, discursiva, completar).
           </span>
+          <span className="flex w-full flex-col items-stretch gap-1 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
+          <span className="flex items-center justify-center gap-1 text-[10px] text-slate-500" data-tour="ativ-consumo">
+            <SeloConsumo nivel="alto" />
+            {/imag|figur|ilustr|desenh/i.test(detalhes) && !/sem imag/i.test(detalhes) ? "com imagens consome mais" : ""}
+          </span>
           <button
             onClick={() => gerar()}
             disabled={gerando}
             data-tour="ativ-gerar"
             className="w-full rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 sm:w-auto"
           >
-            {gerando ? "Gerando… (com imagens leva até 1 min)" : atividade ? "✨ Gerar de novo" : "✨ Gerar atividade/avaliação"}
+            {gerando ? "Gerando… (com imagens leva até 1 min)" : atividade ? "✨ Gerar de novo" : "✨ Gerar"}
           </button>
+          </span>
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500" data-tour="ativ-aprende">
           {aprendido && aprendido.salvas + aprendido.ajustes > 0 ? (
@@ -1123,7 +1142,16 @@ function GerarAtividadeTela({
           onFechar={() => setPrevia(false)}
           onImprimir={() => imprimirAtividade({ ...atividade, ...dadosBase(), valorTotal: atividade.valorTotal }, extrasImpressao)}
           onPdf={() => baixarPdf({ ...atividade, ...dadosBase(), valorTotal: atividade.valorTotal }, extrasImpressao)}
-          ajuste={{ valor: ajuste, onChange: setAjuste, onAjustar: () => gerar("ajuste"), ajustando }}
+          ajuste={{
+            valor: ajuste,
+            onChange: setAjuste,
+            onAjustar: () => gerar("ajuste"),
+            ajustando,
+            onEditarMao: () => {
+              setPrevia(false);
+              setTimeout(irEditarMao, 50);
+            },
+          }}
         />
       )}
       {usouPlano === false && atividade && (

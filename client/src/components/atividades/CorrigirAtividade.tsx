@@ -1,3 +1,4 @@
+import SeloConsumo from "../SeloConsumo";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlunosAtividade, Atividade, atividadesApi, Correcao, fmtNum, letra, pontuar, Questao, reduzirFoto, RespostaAluno, turmasApi } from "../../api/atividades";
 import { SituacaoDiario } from "../../api/diario";
@@ -582,12 +583,15 @@ function CorrecaoAluno({
             <span className="block text-2xl">📷</span>
             <span className="block text-sm font-semibold text-indigo-900">Corrigir com foto (I.A)</span>
             <span className="block text-xs text-indigo-800">Tire foto da folha do aluno. A I.A corrige pelo gabarito e você confere.</span>
-            <span className="mt-1 block text-[11px] font-medium text-amber-700">⚡ Usa I.A: consome do seu limite do mês (ou dos créditos).</span>
+            <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-amber-700">
+              <SeloConsumo nivel="medio" /> usa do seu limite do mês (ou dos créditos)
+            </span>
           </button>
           <button onClick={() => setModo("form")} className="rounded-xl border-2 border-slate-200 p-4 text-left hover:bg-slate-50">
             <span className="block text-2xl">✍️</span>
             <span className="block text-sm font-semibold text-slate-800">Corrigir à mão</span>
             <span className="block text-xs text-slate-500">Marque as respostas do aluno; as objetivas são somadas sozinhas. Não usa I.A.</span>
+            <span className="mt-1 block text-[11px] font-medium text-emerald-700">Sem consumo</span>
           </button>
         </div>
       )}

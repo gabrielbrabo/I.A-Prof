@@ -21,7 +21,7 @@ export const env = {
   openaiKey: process.env.OPENAI_API_KEY || "",
   imagemModelo: process.env.IMAGEM_MODELO || "gpt-image-2.5-flare",
   imagemQualidade: (process.env.IMAGEM_QUALIDADE || "medium") as "low" | "medium" | "high",
-  imagemMax: Number(process.env.IMAGEM_MAX || 8), // por atividade
+  imagemMax: Number(process.env.IMAGEM_MAX || 12), // por atividade (questoes + texto + personagem do topo)
   imagemCustoUsd: Number(process.env.IMAGEM_CUSTO_USD || 0), // 0 = usa a tabela de precos
   // Transcricao de voz (Groq Whisper) para navegadores sem ditado proprio (Firefox, Brave, Opera...)
   groqKey: process.env.GROQ_API_KEY || "",

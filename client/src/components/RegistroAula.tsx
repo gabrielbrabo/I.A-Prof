@@ -1,3 +1,4 @@
+import SeloConsumo from "./SeloConsumo";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDitado } from "../lib/useDitado";
 import { ErroApi } from "../lib/sessao";
@@ -819,6 +820,7 @@ export default function RegistroAula({
           {!gerando && (!periodo || texto.trim().length < 3) && (
             <span className="text-xs text-slate-400">{!periodo ? "Escolha o período (passo 1)" : "Escreva o que trabalhou"}</span>
           )}
+          <SeloConsumo nivel="baixo" />
           <button
             data-tour="gerar"
             onClick={gerar}

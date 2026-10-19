@@ -42,9 +42,13 @@ export async function assinar(req: Request, res: Response) {
   const u = await Usuario.findById(req.usuarioId);
   if (!u) return res.status(401).json({ message: "Faça login de novo." });
   const atual = await Assinatura.findOne({ usuario: u._id });
-  // Ja paga o mesmo plano: nao cobra de novo
+  // Ja paga o mesmo plano no mesmo ciclo: nao cobra de novo. Do mensal para o anual pode migrar quando quiser.
   if (atual && assinaturaValida(atual) && atual.planoId === plano.id && !atual.cancelarNoFim) {
-    return res.status(409).json({ message: `Você já assina o plano ${plano.nome}.` });
+    const cicloAtual = atual.ciclo === "anual" ? "anual" : "mensal";
+    if (cicloAtual === p.data.ciclo) return res.status(409).json({ message: `Você já assina o plano ${plano.nome} (${cicloAtual}).` });
+    if (cicloAtual === "anual") {
+      return res.status(409).json({ message: `Você já tem o plano ${plano.nome} anual, pago até o fim do período. Para passar ao mensal, cancele a renovação e assine o mensal quando o anual acabar.` });
+    }
   }
   try {
     // Troca de plano: encerra a assinatura anterior no gateway antes de criar a nova

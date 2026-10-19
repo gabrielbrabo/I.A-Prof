@@ -13,8 +13,16 @@ export const TIPOS_QUESTAO: Record<TipoQuestao, string> = {
 export const TIPOS_DEV = ["Normal", "Prova", "Trabalho", "Outra Atividade"] as const;
 export type TipoDev = (typeof TIPOS_DEV)[number];
 
+// relogio "8:10" | termometro "20" | fracao "3/4" | grafico "Manha:28; Tarde:32": desenhadas pelo sistema (sempre exatas)
+export type FiguraExata = "relogio" | "termometro" | "fracao" | "grafico";
+export const FIGURAS_EXATAS: Record<FiguraExata, { nome: string; exemplo: string }> = {
+  relogio: { nome: "Relógio", exemplo: "8:10" },
+  termometro: { nome: "Termômetro (°C)", exemplo: "20" },
+  fracao: { nome: "Fração", exemplo: "3/4" },
+  grafico: { nome: "Gráfico de barras", exemplo: "Manhã:28; Tarde:32; Noite:18" },
+};
 export interface Figura {
-  tipo: "" | "emoji" | "svg";
+  tipo: "" | "emoji" | "svg" | FiguraExata;
   conteudo: string;
 }
 export interface ImagemAtividade {
@@ -26,6 +34,7 @@ export interface Cabecalho {
   escola: string;
   logo: string;
   campos: string[];
+  mascote?: string; // ilustracao do topo da folha (personagem do tema)
 }
 export interface Estilo {
   fonte: "normal" | "grande" | "extra";
@@ -35,6 +44,9 @@ export interface Estilo {
   imagem?: "pequena" | "media" | "grande"; // tamanho das imagens
   colunas?: boolean; // alternativas em 2 colunas
   paginas?: 0 | 1 | 2; // 1 = tudo em uma folha (a impressao encolhe ate caber)
+  visual?: "cards" | "simples"; // cards = quadros coloridos por questao (se o professor pedir); simples = folha limpa (padrao)
+  enfeites?: boolean; // estrelas e selo no titulo
+  rodape?: string; // frase no rodape (so se o professor pedir)
 }
 // Texto de apoio (leitura e interpretacao)
 export interface PontosPeriodo {
@@ -62,7 +74,7 @@ export const CAMPOS_CABECALHO: Array<{ id: string; nome: string }> = [
 ];
 // serie e periodo so aparecem se o professor marcar/pedir
 export const cabecalhoPadrao = (): Cabecalho => ({ escola: "", logo: "", campos: ["escola", "professor", "turma", "aluno", "data", "nota"] });
-export const estiloPadrao = (): Estilo => ({ fonte: "normal", colorido: false, caixaAlta: false, layout: "normal", imagem: "media", colunas: false });
+export const estiloPadrao = (): Estilo => ({ fonte: "normal", colorido: false, caixaAlta: false, layout: "normal", imagem: "media", colunas: false, visual: "simples", enfeites: false, rodape: "" });
 // SVG da I.A mostrado como imagem (o navegador nao roda script dentro de <img>)
 export const svgParaSrc = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
@@ -79,6 +91,7 @@ export interface Questao {
   figura?: Figura;
   linhas?: number; // linhas para resposta (0 = automatico)
   quadro?: string; // bloco alinhado: caca-palavras, colunas para ligar, tabela
+  sequencia?: number; // a imagem e uma faixa com N cenas (producao de texto)
 }
 
 export interface Atividade {
@@ -224,7 +237,8 @@ export const atividadesApi = {
   esquecerPreferencias: () => api<{ ok: boolean }>("/atividades/preferencias", { method: "DELETE" }),
   obter: (id: string) => api<Atividade>(`/atividades/${id}`),
   // ajustesFeitos: ajustes pedidos a I.A nesta atividade (ela aprende com eles so quando o professor salva)
-  salvar: (a: Atividade, ajustesFeitos?: string[]) => {
+  salvar: (a0: Atividade, ajustesFeitos?: string[]) => {
+    const a = semImagensSobrando(a0);
     const body = JSON.stringify(ajustesFeitos?.length ? { ...a, ajustesFeitos } : a);
     return a._id ? api<Atividade>(`/atividades/${a._id}`, { method: "PUT", body }) : api<Atividade>("/atividades", { method: "POST", body });
   },
@@ -302,4 +316,11 @@ export async function miniatura(dataUrl: string, lado = 384): Promise<string> {
   ctx.fillRect(0, 0, c.width, c.height);
   ctx.drawImage(bmp, 0, 0, c.width, c.height);
   return c.toDataURL("image/jpeg", 0.8);
+}
+
+// Imagens geradas pela I.A que nao estao mais em uso (ex.: trocadas num ajuste) nao vao para o servidor
+export function semImagensSobrando(a: Atividade): Atividade {
+  if (!a.imagens?.length) return a;
+  const usadas = new Set([a.cabecalho?.logo, a.cabecalho?.mascote, a.texto?.imagem, ...a.questoes.map((q) => q.imagem)].filter(Boolean) as string[]);
+  return { ...a, imagens: a.imagens.filter((i) => !i.id.startsWith("ia") || usadas.has(i.id)) };
 }

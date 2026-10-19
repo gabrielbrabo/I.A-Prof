@@ -1,5 +1,8 @@
 import { useRef } from "react";
+import { svgFiguraExata } from "../../lib/figurasExatas";
 import {
+  FIGURAS_EXATAS,
+  FiguraExata,
   Atividade,
   ajustarValores,
   CAMPOS_CABECALHO,
@@ -87,7 +90,7 @@ export default function EditorAtividade({ valor, onChange }: { valor: Atividade;
     if (!novas.length) return;
     const lista = [...imagens, ...novas];
     if (destino === "logo") onChange({ ...a, imagens: lista, cabecalho: { ...cab, logo: novas[0].id } });
-    else onChange({ ...a, imagens: lista, questoes: a.questoes.map((q, j) => (j === destino ? { ...q, imagem: novas[0].id } : q)) });
+    else onChange({ ...a, imagens: lista, questoes: a.questoes.map((q, j) => (j === destino ? { ...q, imagem: novas[0].id, sequencia: 0 } : q)) });
   }
   const bate = Math.abs(soma - a.valorTotal) < 0.01;
 
@@ -120,7 +123,7 @@ export default function EditorAtividade({ valor, onChange }: { valor: Atividade;
       </label>
 
       {/* Cabecalho e aparencia da folha */}
-      <details className="rounded-xl border border-slate-200 bg-white p-3" open={!!(cab.logo || cab.escola)}>
+      <details id="editor-aparencia" className="rounded-xl border border-slate-200 bg-white p-3" open={!!(cab.logo || cab.escola)}>
         <summary className="cursor-pointer text-sm font-semibold text-slate-700">🏫 Cabeçalho e aparência da folha</summary>
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[auto_1fr]">
           <div className="flex flex-col items-center gap-1">
@@ -137,6 +140,14 @@ export default function EditorAtividade({ valor, onChange }: { valor: Atividade;
               <button type="button" onClick={() => set({ cabecalho: { ...cab, logo: "" } })} className="text-[11px] text-rose-500 hover:underline">
                 tirar logo
               </button>
+            )}
+            {imagemPorId(cab.mascote) && (
+              <>
+                <img src={imagemPorId(cab.mascote)!.dataUrl} alt="Personagem do topo" className="mt-2 h-16 w-16 rounded-lg object-contain ring-1 ring-slate-200" />
+                <button type="button" onClick={() => set({ cabecalho: { ...cab, mascote: "" } })} className="text-[11px] text-rose-500 hover:underline">
+                  tirar personagem
+                </button>
+              </>
             )}
           </div>
           <div className="space-y-2">
@@ -159,6 +170,22 @@ export default function EditorAtividade({ valor, onChange }: { valor: Atividade;
               ))}
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+              <span className="font-medium text-slate-500">Visual:</span>
+              <select
+                value={estilo.visual ?? "simples"}
+                onChange={(e) => set({ estilo: { ...estilo, visual: e.target.value as "cards" | "simples" } })}
+                className="rounded border border-slate-300 px-1 py-0.5"
+                aria-label="Visual da folha"
+              >
+                <option value="simples">Simples (folha limpa)</option>
+                <option value="cards">Quadros coloridos</option>
+              </select>
+              {estilo.visual === "cards" && (
+                <label className="flex items-center gap-1" title="Estrelinhas e selo da matéria no título">
+                  <input type="checkbox" className="accent-indigo-600" checked={!!estilo.enfeites} onChange={(e) => set({ estilo: { ...estilo, enfeites: e.target.checked } })} />
+                  Enfeites
+                </label>
+              )}
               <span className="font-medium text-slate-500">Letra:</span>
               {(["normal", "grande", "extra"] as const).map((f) => (
                 <label key={f} className="flex items-center gap-1">
@@ -205,6 +232,16 @@ export default function EditorAtividade({ valor, onChange }: { valor: Atividade;
                 LETRA BASTÃO
               </label>
             </div>
+            <label className="block text-xs font-medium text-slate-500">
+              Frase no rodapé (opcional)
+              <input
+                className={`${campo} mt-1`}
+                value={estilo.rodape ?? ""}
+                maxLength={160}
+                placeholder="Ex.: Você é capaz! Revise antes de entregar. (em branco: sem frase)"
+                onChange={(e) => set({ estilo: { ...estilo, rodape: e.target.value } })}
+              />
+            </label>
           </div>
         </div>
       </details>
@@ -487,7 +524,33 @@ export default function EditorAtividade({ valor, onChange }: { valor: Atividade;
                   </button>
                 </span>
               )}
-              {q.figura?.tipo && (
+              {q.figura?.tipo && q.figura.tipo in FIGURAS_EXATAS && (
+                <span className="relative flex items-center gap-2 rounded-lg bg-sky-50 px-2 py-1 ring-1 ring-sky-200" title="Figura exata (desenhada pelo sistema)">
+                  {svgFiguraExata(q.figura.tipo, q.figura.conteudo) ? (
+                    <img src={svgParaSrc(svgFiguraExata(q.figura.tipo, q.figura.conteudo))} alt={FIGURAS_EXATAS[q.figura.tipo as FiguraExata].nome} className="h-14 w-auto" />
+                  ) : (
+                    <span className="text-[11px] text-rose-600">valor inválido</span>
+                  )}
+                  <label className="text-[11px] text-slate-600">
+                    {FIGURAS_EXATAS[q.figura.tipo as FiguraExata].nome}
+                    <input
+                      className="mt-0.5 block w-40 rounded border border-slate-300 px-1.5 py-0.5 text-xs"
+                      value={q.figura.conteudo}
+                      placeholder={FIGURAS_EXATAS[q.figura.tipo as FiguraExata].exemplo}
+                      onChange={(e) => setQ(i, { figura: { tipo: q.figura!.tipo, conteudo: e.target.value } })}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setQ(i, { figura: { tipo: "", conteudo: "" } })}
+                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-rose-600 text-xs text-white"
+                    aria-label="Tirar figura"
+                  >
+                    ×
+                  </button>
+                </span>
+              )}
+              {q.figura?.tipo && !(q.figura.tipo in FIGURAS_EXATAS) && (
                 <span className="relative flex items-center rounded-lg bg-amber-50 px-2 py-1 ring-1 ring-amber-200" title="Figura feita pela I.A">
                   {q.figura.tipo === "emoji" ? (
                     <span className="text-2xl leading-none">{q.figura.conteudo}</span>
@@ -507,7 +570,7 @@ export default function EditorAtividade({ valor, onChange }: { valor: Atividade;
               {imagens.length > 0 && (
                 <select
                   value={q.imagem ?? ""}
-                  onChange={(e) => setQ(i, { imagem: e.target.value })}
+                  onChange={(e) => setQ(i, { imagem: e.target.value, sequencia: 0 })}
                   className="rounded-lg border border-slate-300 px-2 py-1 text-xs"
                   aria-label="Imagem da questão"
                 >
@@ -529,6 +592,25 @@ export default function EditorAtividade({ valor, onChange }: { valor: Atividade;
               >
                 + imagem do computador
               </button>
+              {!q.figura?.tipo && (
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const t = e.target.value as FiguraExata;
+                    if (t) setQ(i, { figura: { tipo: t, conteudo: FIGURAS_EXATAS[t].exemplo } });
+                  }}
+                  className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-indigo-700"
+                  aria-label="Adicionar figura"
+                  title="Desenho exato, sem gastar I.A"
+                >
+                  <option value="">+ relógio, termômetro, fração ou gráfico</option>
+                  {(Object.keys(FIGURAS_EXATAS) as FiguraExata[]).map((t) => (
+                    <option key={t} value={t}>
+                      {FIGURAS_EXATAS[t].nome}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </li>
         ))}

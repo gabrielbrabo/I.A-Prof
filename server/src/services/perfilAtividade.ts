@@ -6,7 +6,7 @@ import { PerfilAtividade } from "../models/PerfilAtividade";
 const MAX_AJUSTES = 10;
 
 type Salva = {
-  estilo?: { fonte?: string; colorido?: boolean; caixaAlta?: boolean; layout?: string; imagem?: string; colunas?: boolean } | null;
+  estilo?: { fonte?: string; colorido?: boolean; caixaAlta?: boolean; layout?: string; imagem?: string; colunas?: boolean; visual?: string; enfeites?: boolean } | null;
   cabecalho?: { escola?: string; campos?: string[] } | null;
   questoes: Array<{ tipo: string; imagem?: string; figura?: { tipo?: string } }>;
 };
@@ -22,6 +22,8 @@ export async function aprenderDaSalva(usuario: string, a: Salva) {
     marcar(`colorido:${!!e.colorido}`);
     marcar(`caixaAlta:${!!e.caixaAlta}`);
     marcar(`colunas:${!!e.colunas}`);
+    if (e.visual) marcar(`visual:${e.visual}`);
+    marcar(`enfeites:${!!e.enfeites}`);
     const comImagem = a.questoes.filter((q) => q.imagem || (q.figura?.tipo ?? "") !== "").length;
     marcar(`imagens:${comImagem >= a.questoes.length / 2 ? "sim" : "nao"}`);
     for (const q of a.questoes) marcar(`tipo:${q.tipo}`);
@@ -71,6 +73,8 @@ const NOMES: Record<string, string> = {
   "colorido:true": "colorida",
   "caixaAlta:true": "LETRA BASTÃO (maiúscula)",
   "colunas:true": "alternativas em 2 colunas",
+  "visual:cards": "questões em quadros coloridos (estilo.visual cards)",
+  "enfeites:true": "com enfeites no título (estilo.enfeites)",
   "imagens:sim": "com imagens na maioria das questões",
   "imagens:nao": "sem imagens na maioria das questões",
 };

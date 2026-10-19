@@ -1,5 +1,6 @@
 import { Atividade, cabecalhoPadrao, estiloPadrao, fmtNum, letra, Questao, svgParaSrc } from "../../api/atividades";
 import { ANOS } from "../../lib/formatarRegistro";
+import { svgFiguraExata } from "../../lib/figurasExatas";
 
 const nomeSerie = (ano: string) => ANOS.find((x) => x.valor === ano)?.nome ?? ano;
 
@@ -31,6 +32,7 @@ const CSS = `
   th { background: #f1f5f9; }
   td.num { text-align: right; width: 90px; }
   .rodape { margin-top: 10px; font-size: 9pt; color: #666; text-align: right; }
+  .rodape-simples { margin-top: 14px; padding-top: 6px; border-top: 1px dashed #999; text-align: center; font-weight: bold; font-size: 11pt; page-break-inside: avoid; }
 `;
 
 // Letra grande / colorida (pedido do professor)
@@ -56,8 +58,13 @@ const scriptCaber = (paginas: number) =>
   `for(var i=0;i<30&&b.getBoundingClientRect().height>alvo&&z>0.5;i++){z=Math.round((z-0.03)*100)/100;b.style.zoom=z;b.style.width=(182/z)+"mm";}}` +
   `caber();window.addEventListener("load",caber);})();<\/script>`;
 
+// Fontes da folha caprichada: Fredoka (titulos) e Andika (texto, feita para quem esta aprendendo a ler)
+const FONTES = `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">`;
 const montarHtml = (titulo: string, corpo: string, extraCss = "", paginas = 0) =>
-  `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(titulo)}</title><style>${CSS}${CSS_IMG}${extraCss}</style></head><body>${corpo}${paginas > 0 ? scriptCaber(paginas) : ""}</body></html>`;
+  `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(titulo)}</title>${corpo.includes('class="folha-cards') ? FONTES : ""}<style>${CSS}${CSS_IMG}${extraCss}</style></head><body>${corpo}${paginas > 0 ? scriptCaber(paginas) : ""}</body></html>`;
+
+// espera as fontes da folha (sem travar se a internet falhar)
+const fontesProntas = (doc: Document) => Promise.race([doc.fonts?.ready ?? Promise.resolve(), new Promise((ok) => setTimeout(ok, 2500))]);
 
 function imprimirHtml(titulo: string, corpo: string, extraCss = "", paginas = 0) {
   const html = montarHtml(titulo, corpo, extraCss, paginas);
@@ -70,12 +77,13 @@ function imprimirHtml(titulo: string, corpo: string, extraCss = "", paginas = 0)
   doc.write(html);
   doc.close();
   const imprimir = () => {
-    iframe.contentWindow!.focus();
+    if (!iframe.contentWindow) return; // quadro ja removido
+    iframe.contentWindow.focus();
     iframe.contentWindow!.print();
     setTimeout(() => iframe.remove(), 60000);
   };
   // espera as fontes/layout
-  setTimeout(imprimir, 600);
+  setTimeout(() => void fontesProntas(doc).then(() => setTimeout(imprimir, 150)), 400);
 }
 
 function cabecalho(a: Atividade, extra: { professor?: string; escola?: string }) {
@@ -107,6 +115,8 @@ function figuraHtml(q: Questao, a: Atividade) {
   if (img) partes.push(`<img src="${img.dataUrl}" alt="">`);
   if (q.figura?.tipo === "emoji" && q.figura.conteudo) partes.push(`<span class="emoji">${esc(q.figura.conteudo)}</span>`);
   if (q.figura?.tipo === "svg" && q.figura.conteudo) partes.push(`<img src="${svgParaSrc(q.figura.conteudo)}" alt="">`);
+  const exata = q.figura ? svgFiguraExata(q.figura.tipo, q.figura.conteudo) : "";
+  if (exata) partes.push(`<img src="${svgParaSrc(exata)}" alt="">`);
   return partes.length ? `<div class="fig">${partes.join(" ")}</div>` : "";
 }
 
@@ -164,6 +174,7 @@ function textoPuro(s: string) {
 }
 
 function corpoAtividade(a: Atividade, extra: { professor?: string; escola?: string }) {
+  if (a.estilo?.visual === "cards") return corpoCards(a, extra);
   const t = a.texto;
   const timg = t?.imagem ? a.imagens?.find((i) => i.id === t.imagem) : null;
   const classeImg = t?.posicao === "direita" ? ' class="dir"' : t?.posicao === "esquerda" ? ' class="esq"' : "";
@@ -174,9 +185,10 @@ function corpoAtividade(a: Atividade, extra: { professor?: string; escola?: stri
         .map((par) => `<p>${esc(par)}</p>`)
         .join("")}</div>`
     : "";
+  const rodape = a.estilo?.rodape?.trim() ? `<div class="rodape-simples">${esc(a.estilo.rodape)}</div>` : "";
   const corpo = `${cabecalho(a, extra)}<h1>${esc(a.titulo)}</h1>${a.instrucoes ? `<div class="instr">${esc(a.instrucoes)}</div>` : ""}${textoHtml}${a.questoes
     .map((q, i) => questaoAluno(q, i + 1, a))
-    .join("")}`;
+    .join("")}${rodape}`;
   return { corpo, css: cssDoEstilo(a) };
 }
 
@@ -222,6 +234,7 @@ export async function baixarPdf(a: Atividade, extra: { professor?: string; escol
     doc.close();
     await new Promise<void>((ok) => (doc.readyState === "complete" ? ok() : iframe.contentWindow!.addEventListener("load", () => ok(), { once: true })));
     await Promise.all(Array.from(doc.images).map((img) => (img.complete ? null : new Promise((ok) => ((img.onload = ok), (img.onerror = ok))))));
+    await fontesProntas(doc);
     const body = doc.body;
     const canvas = await html2canvas(body, { scale: 2, backgroundColor: "#ffffff", useCORS: true, windowWidth: body.scrollWidth });
     const pdf = new jsPDF({ unit: "mm", format: "a4" });
@@ -238,7 +251,7 @@ export async function baixarPdf(a: Atividade, extra: { professor?: string; escol
     } else {
       // pontos de corte permitidos: inicio de cada questao (nao corta questao no meio)
       const topoBody = body.getBoundingClientRect().top;
-      const cortes = Array.from(body.querySelectorAll<HTMLElement>(".q, .texto, h1"))
+      const cortes = Array.from(body.querySelectorAll<HTMLElement>(".q, .texto, h1, .rodape-cards"))
         .map((el) => (el.getBoundingClientRect().top - topoBody) * (canvas.width / body.getBoundingClientRect().width))
         .filter((y) => y > 0)
         .sort((x, y) => x - y);
@@ -265,4 +278,186 @@ export async function baixarPdf(a: Atividade, extra: { professor?: string; escol
   } finally {
     iframe.remove();
   }
+}
+
+// ---------- Folha caprichada ("cards"): cada questao num quadro colorido com numero em destaque ----------
+const CORES = ["#1e66d0", "#2e9e4f", "#7b3fbf", "#f07a1a", "#0e9aa7", "#d63a7a"];
+const estrela = (cor: string, tam = 30) =>
+  `<svg class="estrela" width="${tam}" height="${tam}" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.8l3.1 6.4 7 1-5.1 4.9 1.2 7-6.2-3.3-6.2 3.3 1.2-7L1.9 9.2l7-1z" fill="${cor}" stroke="#7a5a00" stroke-width="1" stroke-linejoin="round"/></svg>`;
+
+const CSS_CARDS = `
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .folha-cards{font-family:Andika,"Comic Sans MS",Arial,sans-serif;font-size:12pt;line-height:1.4;color:#1f2937}
+  .folha-cards .t{font-family:Fredoka,"Arial Rounded MT Bold",Arial,sans-serif}
+  .topo-cards{display:flex;align-items:stretch;gap:10px;margin-bottom:8px}
+  .topo-cards .caixa{flex:1;display:flex;align-items:center;gap:12px;border:2px solid #334155;border-radius:14px;padding:8px 12px;min-height:84px}
+  .topo-cards .escola{display:flex;flex-direction:column;align-items:center;justify-content:center;max-width:32%;text-align:center;font-size:10.5pt;font-weight:700;line-height:1.2}
+  .topo-cards .escola img{max-height:62px;max-width:130px;object-fit:contain;margin-bottom:2px}
+  .topo-cards .meio{flex:1;text-align:center}
+  .topo-cards h1{font-family:Fredoka,"Arial Rounded MT Bold",Arial,sans-serif;font-weight:700;font-size:21pt;line-height:1.1;margin:0;color:#1e40af;text-transform:uppercase;letter-spacing:.5px}
+  .topo-cards .faixa{display:inline-flex;align-items:center;gap:10px;margin-top:6px}
+  .topo-cards .selo{font-family:Fredoka,Arial,sans-serif;font-weight:700;font-size:14pt;background:#fde047;border:2px solid #1f2937;padding:2px 18px;clip-path:polygon(6% 0,94% 0,100% 50%,94% 100%,6% 100%,0 50%)}
+  .topo-cards .mascote{width:118px;display:flex;align-items:flex-end;justify-content:center}
+  .topo-cards .mascote img{max-width:118px;max-height:120px;object-fit:contain}
+  .campos-cards{display:flex;flex-wrap:wrap;column-gap:18px;row-gap:4px;font-size:11pt;margin:2px 2px 10px}
+  .campos-cards .c{display:flex;gap:6px;align-items:flex-end;flex:1 1 160px;white-space:nowrap;font-weight:700}
+  .campos-cards .c span{flex:1;border-bottom:1.5px solid #374151;min-width:50px;font-weight:400;padding-left:4px}
+  .campos-cards .c.l{flex-basis:100%}
+  .instr-cards{text-align:center;margin:0 auto 10px;display:table;padding:4px 18px;border:2px dashed #f59e0b;background:#fffbeb;border-radius:999px;font-weight:700;font-size:11pt}
+  .grade{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .card{border:2.2px solid var(--cor);border-radius:14px;padding:10px 12px;page-break-inside:avoid;break-inside:avoid;position:relative;background:#fff}
+  .card.larga{grid-column:1 / -1}
+  .card .cab-q{display:flex;gap:8px;align-items:flex-start}
+  .card .num{flex:0 0 auto;width:28px;height:28px;border-radius:50%;background:var(--cor);color:#fff;font-family:Fredoka,Arial,sans-serif;font-weight:700;font-size:14pt;display:flex;align-items:center;justify-content:center;margin-top:-1px}
+  .card .enun{flex:1;font-weight:700}
+  .card .pts{font-weight:400;font-size:9pt;color:#475569;white-space:nowrap}
+  .card .corpo{display:flex;gap:10px;align-items:center;margin-top:6px}
+  .card .corpo .resp{flex:1;min-width:0}
+  .card .corpo .ilus{flex:0 0 auto;max-width:46%;display:flex;gap:6px;align-items:center;justify-content:center}
+  .card .ilus img{max-height:var(--himg);max-width:100%;object-fit:contain}
+  .card .faixa-ilus{display:flex;justify-content:center;gap:8px;margin:6px 0 2px}
+  .card .faixa-ilus img{max-height:var(--hfaixa);max-width:100%;object-fit:contain}
+  .card img.fx-sq{max-height:150px;width:150px} .card img.fx-termo{max-height:190px;height:190px;width:auto} .card img.fx-graf{max-height:170px;width:100%}
+  .card .alt{display:flex;gap:8px;align-items:flex-start;margin:5px 0}
+  .card .let{flex:0 0 auto;width:22px;height:22px;border-radius:50%;border:2px solid var(--cor);color:#111;font-family:Fredoka,Arial,sans-serif;font-weight:700;font-size:10.5pt;display:flex;align-items:center;justify-content:center;background:#fff}
+  .card .alts2{display:grid;grid-template-columns:1fr 1fr;column-gap:12px}
+  .card .vf{display:flex;gap:8px;margin:5px 0}
+  .card .vf b{flex:0 0 auto;font-weight:400;white-space:nowrap}
+  .card .linhas div{border-bottom:1.5px solid #9ca3af;height:26px;margin-left:0}
+  .card .quadro{font-family:"Courier New",Courier,monospace;white-space:pre;font-size:.95em;line-height:1.5;margin:6px 0 2px;padding:6px 10px;border:1.5px solid var(--cor);border-radius:10px;display:inline-block;max-width:100%;overflow:hidden;background:#fafafa}
+  .card .seq{position:relative;margin-top:8px}
+  .card .seq img{width:100%;display:block;border-radius:10px}
+  .card .seq .n{position:absolute;top:6px;width:26px;height:26px;border-radius:50%;color:#fff;font-family:Fredoka,Arial,sans-serif;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+  .texto-cards{border:2.2px solid #0e9aa7;border-radius:14px;padding:10px 14px;margin:0 0 10px;page-break-inside:avoid;display:flow-root;background:#f0fdfa}
+  .texto-cards h2{font-family:Fredoka,Arial,sans-serif;margin:0 0 6px;text-align:center;font-size:14pt;color:#0f766e}
+  .texto-cards p{margin:0 0 6px;text-align:justify}
+  .texto-cards img{display:block;margin:6px auto;max-height:200px;max-width:70%;object-fit:contain}
+  .texto-cards img.dir{float:right;width:38%;max-width:38%;max-height:none;margin:2px 0 8px 14px}
+  .texto-cards img.esq{float:left;width:38%;max-width:38%;max-height:none;margin:2px 14px 8px 0}
+  .rodape-cards{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:12px;padding-top:8px;border-top:2px dashed #93c5fd;font-weight:700;font-size:11.5pt;page-break-inside:avoid}
+  .rodape-cards span{background:#fef9c3;padding:3px 14px;border-radius:8px}
+`;
+
+// Questao precisa da largura toda? (texto longo, quadro, muitas linhas, sequencia de cenas)
+function questaoLarga(q: Questao, a: Atividade) {
+  const e = a.estilo ?? estiloPadrao();
+  if (e.fonte === "extra" || e.layout === "amplo") return true;
+  if ((q.sequencia ?? 0) > 0 || q.quadro?.trim()) return true;
+  if (q.enunciado.length > 230) return true;
+  if (q.tipo === "discursiva" && ((q.linhas ?? 0) > 4 || (!q.linhas && q.enunciado.length > 120))) return true;
+  if (q.tipo === "vf" && q.itens.some((it) => it.texto.length > 55)) return true;
+  const temIlus = !!q.imagem || !!q.figura?.tipo;
+  if (q.tipo === "multipla" && q.alternativas.some((x) => x.length > (temIlus ? 30 : 48))) return true;
+  return false;
+}
+
+function questaoCard(q: Questao, n: number, a: Atividade, larga: boolean) {
+  const e = a.estilo ?? estiloPadrao();
+  const cor = CORES[(n - 1) % CORES.length];
+  const img = q.imagem ? a.imagens?.find((i) => i.id === q.imagem) : null;
+  const seq = img && (q.sequencia ?? 0) > 0 ? q.sequencia! : 0;
+  // figuras "em pe" (relogio, termometro, fracao) ficam ao lado das respostas;
+  // ilustracoes e graficos (mais largos) ficam numa faixa acima das respostas no quadro estreito
+  const lado: string[] = [];
+  const faixa: string[] = [];
+  const exata = q.figura ? svgFiguraExata(q.figura.tipo, q.figura.conteudo, cor) : "";
+  const classeExata = q.figura?.tipo === "termometro" ? "fx-termo" : q.figura?.tipo === "grafico" ? "fx-graf" : "fx-sq";
+  if (exata) (q.figura!.tipo === "grafico" && !larga ? faixa : lado).push(`<img class="${classeExata}" src="${svgParaSrc(exata)}" alt="">`);
+  if (img && !seq) (larga ? lado : faixa).push(`<img src="${img.dataUrl}" alt="">`);
+  if (q.figura?.tipo === "svg" && q.figura.conteudo) lado.push(`<img src="${svgParaSrc(q.figura.conteudo)}" alt="">`);
+  if (q.figura?.tipo === "emoji" && q.figura.conteudo) lado.push(`<span style="font-size:2.2em">${esc(q.figura.conteudo)}</span>`);
+
+  let resp = "";
+  if (q.tipo === "multipla") {
+    const limite = larga ? (lado.length ? 22 : 34) : lado.length ? 8 : 18;
+    const curtas = q.alternativas.every((x) => x.length <= limite);
+    const alts = q.alternativas.map((alt, i) => `<div class="alt"><span class="let">${letra(i)}</span><span>${esc(alt)}</span></div>`).join("");
+    resp = (curtas || (e.colunas && q.alternativas.every((x) => x.length <= limite * 1.6))) && q.alternativas.length >= 4 ? `<div class="alts2">${alts}</div>` : alts;
+  } else if (q.tipo === "vf") resp = q.itens.map((it) => `<div class="vf"><b>( &nbsp; &nbsp; )</b><span>${esc(it.texto)}</span></div>`).join("");
+  else {
+    const linhas = q.linhas && q.linhas > 0 ? q.linhas : q.quadro?.trim() && q.tipo === "completar" ? 0 : q.tipo === "discursiva" ? (e.layout === "compacto" ? 3 : 4) : 2;
+    resp = linhas ? `<div class="linhas">${"<div></div>".repeat(linhas)}</div>` : "";
+  }
+  const quadro = q.quadro?.trim() ? `<div class="quadro">${esc(q.quadro)}</div>` : "";
+  const sequencia = seq
+    ? `<div class="seq"><img src="${img!.dataUrl}" alt="">${Array.from({ length: seq }, (_, k) => `<span class="n" style="left:calc(${(k * 100) / seq}% + 6px);background:${CORES[k % CORES.length]}">${k + 1}</span>`).join("")}</div>`
+    : "";
+  const faixaHtml = faixa.length ? `<div class="faixa-ilus">${faixa.join("")}</div>` : "";
+  const corpo = lado.length ? `<div class="corpo"><div class="resp">${quadro}${resp}</div><div class="ilus">${lado.join("")}</div></div>` : `<div class="corpo" style="display:block">${quadro}${resp}</div>`;
+  const pts = a.semNota ? "" : ` <span class="pts">(${fmtNum(q.valor)} ${q.valor === 1 ? "ponto" : "pontos"})</span>`;
+  return `<div class="q card${larga ? " larga" : ""}" style="--cor:${cor}"><div class="cab-q"><span class="num">${n}</span><div class="enun">${quebra(q.enunciado)}${pts}</div></div>${sequencia}${faixaHtml}${corpo}</div>`;
+}
+
+function corpoCards(a: Atividade, extra: { professor?: string; escola?: string }) {
+  const e = a.estilo ?? estiloPadrao();
+  const cab = a.cabecalho ?? cabecalhoPadrao();
+  const tem = (c: string) => cab.campos.includes(c);
+  const logo = a.imagens?.find((i) => i.id === cab.logo);
+  const mascote = cab.mascote ? a.imagens?.find((i) => i.id === cab.mascote) : null;
+  const escola = (cab.escola || extra.escola || "").trim();
+  const serie = tem("serie") ? nomeSerie(a.ano) : "";
+  const selo = [serie, tem("periodo") && a.periodo ? `${a.periodo}º período` : ""].filter(Boolean).join(" · ");
+  const ladoEscola =
+    logo || (escola && tem("escola")) ? `<div class="escola">${logo ? `<img src="${logo.dataUrl}" alt="">` : ""}${escola && tem("escola") ? `<span>${esc(escola)}</span>` : ""}</div>` : "";
+  // estrelas e selo da materia so com enfeites; serie/periodo so se o professor marcou no cabecalho
+  const textoSelo = selo || (e.enfeites ? a.componente : "");
+  const faixa = e.enfeites || textoSelo ? `<div class="faixa">${e.enfeites ? estrela("#facc15") : ""}${textoSelo ? `<span class="selo">${esc(textoSelo)}</span>` : ""}${e.enfeites ? estrela("#38bdf8") : ""}</div>` : "";
+  const topo = `<div class="topo-cards"><div class="caixa">${ladoEscola}<div class="meio"><h1>${esc(a.titulo)}</h1>${faixa}</div></div>${mascote ? `<div class="mascote"><img src="${mascote.dataUrl}" alt=""></div>` : ""}</div>`;
+  const campo = (rot: string, valor = "", cls = "") => `<div class="c${cls}">${rot}: <span>${esc(valor)}&nbsp;</span></div>`;
+  const campos = [
+    !(escola && (logo || tem("escola"))) && tem("escola") ? campo("Escola", escola, " l") : "",
+    tem("aluno") ? campo("Nome", "", " l") : "",
+    tem("professor") ? campo("Professor(a)", extra.professor || "") : "",
+    tem("turma") ? campo("Turma", a.turma || "") : "",
+    tem("data") ? `<div class="c" style="flex:0 0 180px">Data: <span>&nbsp;&nbsp;&nbsp;/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/</span></div>` : "",
+    !a.semNota ? `<div class="c" style="flex:0 0 200px">Valor: ${fmtNum(a.valorTotal)}${tem("nota") ? ` &nbsp;Nota: <span></span>` : ""}</div>` : "",
+  ].join("");
+  const t = a.texto;
+  const timg = t?.imagem ? a.imagens?.find((i) => i.id === t.imagem) : null;
+  const classeImg = t?.posicao === "direita" ? ' class="dir"' : t?.posicao === "esquerda" ? ' class="esq"' : "";
+  const textoHtml = t?.conteudo?.trim()
+    ? `<div class="texto texto-cards">${t.titulo ? `<h2>${esc(textoPuro(t.titulo))}</h2>` : ""}${timg ? `<img${classeImg} src="${timg.dataUrl}" alt="">` : ""}${textoPuro(t.conteudo)
+        .trim()
+        .split(/\n+/)
+        .map((par) => `<p>${esc(par)}</p>`)
+        .join("")}</div>`
+    : "";
+  // 2 colunas: questoes curtas lado a lado; questao sozinha na linha ocupa a largura toda
+  const largas = a.questoes.map((q) => questaoLarga(q, a));
+  const cards: string[] = [];
+  let i = 0;
+  while (i < a.questoes.length) {
+    if (largas[i] || i + 1 >= a.questoes.length || largas[i + 1]) {
+      cards.push(questaoCard(a.questoes[i], i + 1, a, true));
+      i++;
+    } else {
+      cards.push(questaoCard(a.questoes[i], i + 1, a, false), questaoCard(a.questoes[i + 1], i + 2, a, false));
+      i += 2;
+    }
+  }
+  // frase no rodape so se o professor pediu (a I.A escreve em estilo.rodape)
+  const frase = e.rodape?.trim() ?? "";
+  const rodape = frase ? `<div class="rodape-cards">${e.enfeites ? estrela("#facc15", 26) : ""}<span>${esc(frase)}</span>${e.enfeites ? estrela("#f472b6", 26) : ""}</div>` : "";
+  const corpo = `<div class="folha-cards">${topo}<div class="campos-cards">${campos}</div>${a.instrucoes ? `<div class="instr-cards">${esc(a.instrucoes)}</div>` : ""}${textoHtml}<div class="grade">${cards.join("")}</div>${rodape}</div>`;
+  return { corpo, css: CSS_CARDS + cssCards(a) };
+}
+
+// Opcoes do professor na folha caprichada (letra, espaco, imagens, letra bastao)
+function cssCards(a: Atividade) {
+  const e = a.estilo ?? estiloPadrao();
+  const h = { pequena: 90, media: 140, grande: 210 }[e.imagem ?? "media"];
+  const hf = { pequena: 70, media: 105, grande: 165 }[e.imagem ?? "media"]; // ilustracao em faixa (quadro estreito)
+  const fonte =
+    e.fonte === "grande"
+      ? `.folha-cards{font-size:14.5pt} .topo-cards h1{font-size:24pt} .card .num{width:32px;height:32px} .card .let{width:26px;height:26px}`
+      : e.fonte === "extra"
+        ? `.folha-cards{font-size:18pt;line-height:1.5} .topo-cards h1{font-size:28pt} .card .num{width:38px;height:38px;font-size:18pt} .card .let{width:30px;height:30px;font-size:14pt} .card .linhas div{height:36px}`
+        : "";
+  const layout =
+    e.layout === "compacto"
+      ? `@page{margin:9mm 10mm 10mm} .grade{gap:7px} .card{padding:7px 10px} .card .alt{margin:3px 0} .card .linhas div{height:23px} .topo-cards .caixa{min-height:70px}`
+      : e.layout === "amplo"
+        ? `.grade{gap:14px} .card{padding:12px 14px} .card .linhas div{height:32px}`
+        : "";
+  return `.folha-cards{--himg:${h}px;--hfaixa:${hf}px}${fonte}${layout}${e.caixaAlta ? ` .folha-cards{text-transform:uppercase} .pts{text-transform:none}` : ""}`;
 }
