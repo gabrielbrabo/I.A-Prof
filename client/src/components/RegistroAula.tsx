@@ -244,6 +244,10 @@ export default function RegistroAula({
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(avisoInicial ?? null);
+  // erro: rola ate o aviso (fica acima do campo do texto)
+  useEffect(() => {
+    if (erro) document.getElementById("avisos-aula")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [erro]);
 
   // Guarda a aula nova em andamento (nao vale para aula aberta do Historico)
   useEffect(() => {
@@ -770,6 +774,21 @@ export default function RegistroAula({
         <p className="mb-2 mt-1 text-xs text-slate-500">
           Escreva do seu jeito, abreviado mesmo — ou toque em <b>🎤 Falar</b>. A I.A separa por matéria e coloca os códigos das habilidades.
         </p>
+        {/* Avisos acima do campo (bem visiveis para o professor) */}
+        <div className="mb-2 space-y-2" id="avisos-aula">
+          {erro && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700" role="alert">
+              <span>{erro}</span>
+              {semAcesso && onSemAcesso && (
+                <button onClick={onSemAcesso} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">
+                  Ver planos
+                </button>
+              )}
+            </div>
+          )}
+          {aviso && <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700" role="status">{aviso}</div>}
+          <p className="text-[11px] text-amber-700">⚡ Gerar (ou gerar de novo) usa I.A: consome do seu limite do mês (ou dos créditos).</p>
+        </div>
         <textarea
           data-tour="texto"
           id="texto-aula"
@@ -831,20 +850,8 @@ export default function RegistroAula({
           </button>
           </div>
         </div>
-        <p className="mt-2 text-right text-[11px] text-amber-700">⚡ Gerar (ou gerar de novo) usa I.A: consome do seu limite do mês (ou dos créditos).</p>
       </div>
 
-      {erro && (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          <span>{erro}</span>
-          {semAcesso && onSemAcesso && (
-            <button onClick={onSemAcesso} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">
-              Ver planos
-            </button>
-          )}
-        </div>
-      )}
-      {aviso && <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{aviso}</div>}
 
       {/* Revisao */}
       {itens && planoInfo && (

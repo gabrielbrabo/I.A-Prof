@@ -504,6 +504,11 @@ function GerarAtividadeTela({
     semNota: !valeNota,
   });
 
+  // erro ou pergunta da I.A: rola ate os avisos (ficam acima do campo do pedido; no celular o botao Gerar fica mais abaixo)
+  useEffect(() => {
+    if ((erro || perguntas) && !atividade) document.getElementById("avisos-pedido")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [erro, perguntas, atividade]);
+
   // "Editar a mao": abre o editor e a parte de cabecalho/aparencia (logo, letra, tamanho das imagens)
   function irEditarMao() {
     const ed = document.getElementById("editor-mao") as HTMLDetailsElement | null;
@@ -931,6 +936,61 @@ function GerarAtividadeTela({
         <label className="text-sm font-semibold text-slate-700" htmlFor="detalhes-ativ">
           Como deve ser a atividade?
         </label>
+        {/* Avisos acima do campo do pedido (bem visiveis para o professor) */}
+        <div className="mt-2 space-y-2" id="avisos-pedido">
+          {erro && !atividade && <p className="rounded-lg bg-rose-50 px-4 py-2.5 text-sm text-rose-700" role="alert">{erro}</p>}
+          {aviso && !atividade && <p className="rounded-lg bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800" role="status">{aviso}</p>}
+          {/* A I.A precisa de algo para fazer do jeito pedido */}
+          {perguntas && (
+            <div className="space-y-3 rounded-xl border-2 border-amber-300 bg-amber-50 p-3 sm:p-4">
+              <p className="text-sm font-semibold text-amber-900">🙋 Para fazer do jeito que você pediu, a I.A precisa de:</p>
+              <ul className="list-disc space-y-1 pl-5 text-sm text-amber-900">
+                {perguntas.map((q) => (
+                  <li key={q}>{q}</li>
+                ))}
+              </ul>
+              <textarea
+                rows={2}
+                value={respostas}
+                onChange={(e) => setRespostas(e.target.value)}
+                placeholder="Responda aqui (se precisar de imagem, use “Adicionar imagens” acima)"
+                className={campo}
+              />
+              <div className="flex flex-wrap justify-end gap-2">
+                <button onClick={() => setPerguntas(null)} className="rounded-lg px-4 py-2 text-sm text-amber-900 hover:bg-amber-100">
+                  Fechar
+                </button>
+                <button onClick={() => gerar()} disabled={gerando} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
+                  {gerando ? "Gerando..." : "Responder e gerar"}
+                </button>
+              </div>
+            </div>
+          )}
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500" data-tour="ativ-aprende">
+          {aprendido && aprendido.salvas + aprendido.ajustes > 0 ? (
+            <>
+              <span>
+                🧠 A I.A já aprendeu seu jeito com {aprendido.salvas} atividade(s) salva(s){aprendido.ajustes ? ` e ${aprendido.ajustes} ajuste(s)` : ""}.
+              </span>
+              {esquecer ? (
+                <button
+                  onClick={() => atividadesApi.esquecerPreferencias().then(() => (setAprendido({ salvas: 0, ajustes: 0 }), setEsquecer(false)))}
+                  className="font-semibold text-rose-600 underline"
+                >
+                  Confirmar: esquecer tudo
+                </button>
+              ) : (
+                <button onClick={() => setEsquecer(true)} className="underline hover:text-slate-700">
+                  Esquecer
+                </button>
+              )}
+            </>
+          ) : (
+            <span>🧠 A I.A aprende seu jeito com as atividades que você aprova e salva (e os ajustes delas).</span>
+          )}
+          <span className="basis-full text-amber-700">⚡ Gerar usa I.A: consome do seu limite do mês (ou dos créditos). No teste grátis, conta como 1 atividade.</span>
+        </div>
+        </div>
         <textarea
           id="detalhes-ativ"
           rows={4}
@@ -1027,30 +1087,6 @@ function GerarAtividadeTela({
           </button>
           </span>
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500" data-tour="ativ-aprende">
-          {aprendido && aprendido.salvas + aprendido.ajustes > 0 ? (
-            <>
-              <span>
-                🧠 A I.A já aprendeu seu jeito com {aprendido.salvas} atividade(s) salva(s){aprendido.ajustes ? ` e ${aprendido.ajustes} ajuste(s)` : ""}.
-              </span>
-              {esquecer ? (
-                <button
-                  onClick={() => atividadesApi.esquecerPreferencias().then(() => (setAprendido({ salvas: 0, ajustes: 0 }), setEsquecer(false)))}
-                  className="font-semibold text-rose-600 underline"
-                >
-                  Confirmar: esquecer tudo
-                </button>
-              ) : (
-                <button onClick={() => setEsquecer(true)} className="underline hover:text-slate-700">
-                  Esquecer
-                </button>
-              )}
-            </>
-          ) : (
-            <span>🧠 A I.A aprende seu jeito com as atividades que você aprova e salva (e os ajustes delas).</span>
-          )}
-          <span className="basis-full text-amber-700">⚡ Gerar usa I.A: consome do seu limite do mês (ou dos créditos). No teste grátis, conta como 1 atividade.</span>
-        </div>
       </div>
 
         </>
@@ -1107,35 +1143,9 @@ function GerarAtividadeTela({
         </div>
       )}
 
-      {erro && !atividade && <p className="rounded-lg bg-rose-50 px-4 py-2.5 text-sm text-rose-700">{erro}</p>}
 
-      {/* A I.A precisa de algo para fazer do jeito pedido */}
-      {perguntas && (
-        <div className="space-y-3 rounded-xl border-2 border-amber-300 bg-amber-50 p-3 sm:p-4">
-          <p className="text-sm font-semibold text-amber-900">🙋 Para fazer do jeito que você pediu, a I.A precisa de:</p>
-          <ul className="list-disc space-y-1 pl-5 text-sm text-amber-900">
-            {perguntas.map((q) => (
-              <li key={q}>{q}</li>
-            ))}
-          </ul>
-          <textarea
-            rows={2}
-            value={respostas}
-            onChange={(e) => setRespostas(e.target.value)}
-            placeholder="Responda aqui (se precisar de imagem, use “Adicionar imagens” acima)"
-            className={campo}
-          />
-          <div className="flex flex-wrap justify-end gap-2">
-            <button onClick={() => setPerguntas(null)} className="rounded-lg px-4 py-2 text-sm text-amber-900 hover:bg-amber-100">
-              Fechar
-            </button>
-            <button onClick={() => gerar()} disabled={gerando} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
-              {gerando ? "Gerando..." : "Responder e gerar"}
-            </button>
-          </div>
-        </div>
-      )}
-      {aviso && !atividade && <p className="rounded-lg bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">{aviso}</p>}
+      {ehExterna && erro && !atividade && <p className="rounded-lg bg-rose-50 px-4 py-2.5 text-sm text-rose-700" role="alert">{erro}</p>}
+      {ehExterna && aviso && !atividade && <p className="rounded-lg bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800">{aviso}</p>}
       {previa && atividade && (
         <PreviaAtividade
           html={htmlDaAtividade({ ...atividade, ...dadosBase(), valorTotal: atividade.valorTotal }, extrasImpressao)}

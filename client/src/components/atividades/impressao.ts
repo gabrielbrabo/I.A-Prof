@@ -17,8 +17,8 @@ const CSS = `
   body { font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 12.5pt; line-height: 1.45; margin: 0; }
   .cab { border: 1.5px solid #222; border-radius: 6px; padding: 8px 10px; margin-bottom: 14px; font-size: 11pt; }
   .cab .linha { display: flex; gap: 14px; flex-wrap: wrap; margin: 3px 0; }
-  .cab .campo { flex: 1; min-width: 150px; white-space: nowrap; }
-  .cab .campo span { display: inline-block; border-bottom: 1px solid #555; min-width: 60%; line-height: 1.25; padding-bottom: 1px; vertical-align: bottom; }
+  .cab .campo { flex: 1; min-width: 150px; white-space: nowrap; display: flex; align-items: flex-end; gap: 4px; }
+  .cab .campo span { flex: 1; display: block; border-bottom: 1px solid #555; min-width: 40px; line-height: 1.3; padding: 0 2px 1px; }
   h1 { font-size: 15pt; text-align: center; margin: 4px 0 2px; }
   .instr { text-align: center; font-size: 11pt; color: #333; margin-bottom: 12px; }
   .q { margin: 0 0 14px; page-break-inside: avoid; }
@@ -99,13 +99,13 @@ function cabecalho(a: Atividade, extra: { professor?: string; escola?: string })
       : "";
   const l1 = [!escola && tem("escola") ? linha("Escola") : ""].join("");
   const l2 = [tem("professor") ? linha("Professor(a)", extra.professor || "") : "", tem("turma") ? linha("Turma", a.turma || "") : ""].join("");
-  const l3 = [tem("aluno") ? `<div class="campo">Aluno(a): <span style="min-width:80%">&nbsp;</span></div>` : "", tem("data") ? `<div class="campo" style="flex:0 0 170px">Data: ___/___/______</div>` : ""].join("");
+  const l3 = [tem("aluno") ? `<div class="campo">Aluno(a): <span>&nbsp;</span></div>` : "", tem("data") ? `<div class="campo" style="flex:0 0 170px">Data: ___/___/______</div>` : ""].join("");
   const info = [esc(a.componente), tem("serie") ? esc(nomeSerie(a.ano)) : "", tem("periodo") ? `${a.periodo}º período` : ""].filter(Boolean).join(" · ");
   const l4 = a.semNota
     ? info
       ? `<div class="campo">${info}</div>`
       : ""
-    : `<div class="campo">${info}</div><div class="campo" style="text-align:right">Valor: ${pts(a.valorTotal)}${tem("nota") ? " &nbsp; Nota: ______" : ""}</div>`;
+    : `<div class="campo">${info}</div><div class="campo" style="justify-content:flex-end">Valor: ${pts(a.valorTotal)}${tem("nota") ? " &nbsp; Nota: ______" : ""}</div>`;
   return `${topo}<div class="cab">${[l1, l2, l3, l4].filter(Boolean).map((l) => `<div class="linha">${l}</div>`).join("")}</div>`;
 }
 
@@ -236,7 +236,17 @@ export async function baixarPdf(a: Atividade, extra: { professor?: string; escol
     await Promise.all(Array.from(doc.images).map((img) => (img.complete ? null : new Promise((ok) => ((img.onload = ok), (img.onerror = ok))))));
     await fontesProntas(doc);
     const body = doc.body;
-    const canvas = await html2canvas(body, { scale: 2, backgroundColor: "#ffffff", useCORS: true, windowWidth: body.scrollWidth });
+    // O Tailwind do app deixa <img> como "block"; o html2canvas mede a linha de base do texto com um <img> na pagina do app
+    // e o texto saia mais baixo (o risco do nome do professor cortava o nome). Durante a captura o <img> de medida volta ao normal.
+    const ajusteMedida = document.createElement("style");
+    ajusteMedida.textContent = 'body > div[style*="visibility: hidden"] img{display:inline !important;vertical-align:baseline !important}';
+    document.head.appendChild(ajusteMedida);
+    let canvas: HTMLCanvasElement;
+    try {
+      canvas = await html2canvas(body, { scale: 2, backgroundColor: "#ffffff", useCORS: true, windowWidth: body.scrollWidth });
+    } finally {
+      ajusteMedida.remove();
+    }
     const pdf = new jsPDF({ unit: "mm", format: "a4" });
     const margemX = 14;
     const margemY = 14;
@@ -301,7 +311,7 @@ const CSS_CARDS = `
   .topo-cards .mascote img{max-width:118px;max-height:120px;object-fit:contain}
   .campos-cards{display:flex;flex-wrap:wrap;column-gap:18px;row-gap:4px;font-size:11pt;margin:2px 2px 10px}
   .campos-cards .c{display:flex;gap:6px;align-items:flex-end;flex:1 1 160px;white-space:nowrap;font-weight:700}
-  .campos-cards .c span{flex:1;border-bottom:1.5px solid #374151;min-width:50px;font-weight:400;padding-left:4px}
+  .campos-cards .c span{flex:1;display:block;border-bottom:1.5px solid #374151;min-width:50px;font-weight:400;padding:0 4px 1px;line-height:1.3}
   .campos-cards .c.l{flex-basis:100%}
   .instr-cards{text-align:center;margin:0 auto 10px;display:table;padding:4px 18px;border:2px dashed #f59e0b;background:#fffbeb;border-radius:999px;font-weight:700;font-size:11pt}
   .grade{display:grid;grid-template-columns:1fr 1fr;gap:10px}
