@@ -27,8 +27,13 @@ const usuarioSchema = new Schema(
       escolas: { type: [String], default: [] },
       conectadoEm: { type: Date, default: null },
     },
+    // D.E.V desta conta (hash do CPF do professor no D.E.V). Fica gravado mesmo ao desconectar:
+    // cada conta do I.A Prof so conecta o D.E.V do proprio professor, e cada D.E.V so uma conta do I.A Prof.
+    diarioCpf: { type: String, default: undefined },
   },
   { timestamps: true }
 );
+
+usuarioSchema.index({ diarioCpf: 1 }, { unique: true, sparse: true });
 
 export const Usuario = model("Usuario", usuarioSchema);

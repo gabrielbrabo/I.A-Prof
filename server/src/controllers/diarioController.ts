@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { Request, Response } from "express";
 import { z } from "zod";
 import { Usuario } from "../models/Usuario";
@@ -7,8 +8,18 @@ import { diarioLigado } from "../config/env";
 
 // Integracao com o Diario escolar: conectar a conta, listar turmas e enviar a aula salva.
 
+// CPF do D.E.V guardado so como hash (identifica o professor sem guardar o CPF)
+const SAL_CPF = process.env.DIARIO_CPF_SAL || "iaprof-dev-cpf-v1";
+export const hashCpf = (cpf: string) => createHash("sha256").update(`${SAL_CPF}:${cpf.replace(/\D/g, "")}`).digest("hex");
+const SEM_CONEXAO = { token: null, nome: null, escolas: [], conectadoEm: null };
+
 export async function tokenDo(usuarioId: string) {
-  const u = await Usuario.findById(usuarioId).select("diario").lean();
+  const u = await Usuario.findById(usuarioId).select("diario diarioCpf").lean();
+  if (u?.diario?.token && !u.diarioCpf) {
+    // conexao antiga (antes da trava de 1 D.E.V por conta): pede para conectar de novo uma vez
+    await Usuario.updateOne({ _id: usuarioId }, { $set: { diario: SEM_CONEXAO } });
+    return null;
+  }
   return u?.diario?.token ?? null;
 }
 
@@ -26,10 +37,12 @@ export async function tratarErro(res: Response, usuarioId: string, e: unknown) {
 
 // GET /api/diario -> situacao da conexao
 export async function status(req: Request, res: Response) {
-  const u = await Usuario.findById(req.usuarioId).select("diario").lean();
+  const u = await Usuario.findById(req.usuarioId).select("diario diarioCpf").lean();
+  const conectado = !!u?.diario?.token && !!u.diarioCpf;
+  if (u?.diario?.token && !u.diarioCpf) await Usuario.updateOne({ _id: req.usuarioId }, { $set: { diario: SEM_CONEXAO } });
   res.json({
     disponivel: diarioLigado(),
-    conectado: !!u?.diario?.token,
+    conectado,
     nome: u?.diario?.nome ?? null,
     escolas: u?.diario?.escolas ?? [],
   });
@@ -40,11 +53,22 @@ const conectarSchema = z.object({ cpf: z.string().min(11).max(20), senha: z.stri
 export async function conectar(req: Request, res: Response) {
   const p = conectarSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ message: "Informe o CPF e a senha do D.E.V." });
+  // 1 D.E.V por conta: esta conta so conecta o D.E.V do proprio professor; cada D.E.V so em uma conta do I.A Prof
+  const h = hashCpf(p.data.cpf);
+  const eu = await Usuario.findById(req.usuarioId).select("diarioCpf").lean();
+  if (eu?.diarioCpf && eu.diarioCpf !== h) {
+    return res.status(409).json({ message: "Sua conta do I.A Prof já está ligada ao D.E.V de outro professor. Cada conta só conecta o D.E.V do próprio professor. Se precisar trocar, fale com o suporte." });
+  }
+  if (await Usuario.exists({ diarioCpf: h, _id: { $ne: req.usuarioId } })) {
+    return res.status(409).json({ message: "Este D.E.V já está conectado a outra conta do I.A Prof. Cada professor conecta o seu D.E.V em uma única conta." });
+  }
   try {
     const r = await diario.vincular(p.data.cpf, p.data.senha);
-    await Usuario.updateOne({ _id: req.usuarioId }, { $set: { diario: { token: r.token, nome: r.nome, escolas: r.escolas ?? [], conectadoEm: new Date() } } });
+    await Usuario.updateOne({ _id: req.usuarioId }, { $set: { diarioCpf: h, diario: { token: r.token, nome: r.nome, escolas: r.escolas ?? [], conectadoEm: new Date() } } });
     res.json({ conectado: true, nome: r.nome, escolas: r.escolas ?? [] });
   } catch (e) {
+    // duas contas tentando o mesmo D.E.V ao mesmo tempo: o indice unico barra a segunda
+    if ((e as { code?: number }).code === 11000) return res.status(409).json({ message: "Este D.E.V já está conectado a outra conta do I.A Prof." });
     if (e instanceof ErroDiario && e.status === 401) return res.status(400).json({ message: e.message });
     return tratarErro(res, req.usuarioId!, e);
   }
