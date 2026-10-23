@@ -46,7 +46,7 @@ export function svgTermometro(conteudo: string): string {
   const y = (t: number) => base - ((t - min) / (max - min)) * (base - topo);
   const p: string[] = [];
   p.push(`<rect x="8" y="6" width="104" height="282" rx="16" fill="#fff" stroke="#334155" stroke-width="3"/>`);
-  p.push(`<text x="62" y="20" font-size="13" font-weight="700" font-family="Arial,Helvetica,sans-serif" fill="#111">°C</text>`);
+  p.push(`<text x="16" y="26" font-size="13" font-weight="700" font-family="Arial,Helvetica,sans-serif" fill="#111">°C</text>`);
   p.push(`<rect x="36" y="${topo - 8}" width="18" height="${base - topo + 30}" rx="9" fill="#f1f5f9" stroke="#334155" stroke-width="2.5"/>`);
   const nivel = y(Math.max(min, Math.min(max, v)));
   p.push(`<rect x="40" y="${n2(nivel)}" width="10" height="${n2(base + 20 - nivel)}" fill="#dc2626"/>`);

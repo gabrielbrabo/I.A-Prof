@@ -126,7 +126,14 @@ function Painel() {
     setTour(null);
   };
   useEffect(() => {
-    diarioApi.status().then(setDiario).catch(() => setDiario(null));
+    diarioApi
+      .status()
+      .then((s) => {
+        setDiario(s);
+        // pedido de conexao esperando aprovacao no D.E.V: ja abre a janela com o contador e as instrucoes
+        if (s && !s.conectado && s.pedido) setModalDiario(true);
+      })
+      .catch(() => setDiario(null));
   }, []);
   const [versao, setVersao] = useState(0);
   // Atividades: atividade aberta para editar / corrigir

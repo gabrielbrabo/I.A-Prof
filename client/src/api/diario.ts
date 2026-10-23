@@ -8,7 +8,23 @@ export interface SituacaoDiario {
   conectado: boolean;
   nome: string | null;
   escolas: string[];
+  pedido?: PedidoConexao | null; // aguardando o professor aprovar dentro do D.E.V
 }
+
+// Pedido de conexao: o e-mail da conta do I.A Prof e diferente do D.E.V; o professor aprova no D.E.V em ate 5 minutos
+export interface PedidoConexao {
+  id: string;
+  expiraEm: string;
+  agora: string; // relogio do servidor (o contador nao depende do relogio do aparelho)
+  emailDev: string; // e-mail do D.E.V mascarado
+}
+export type RespostaConectar =
+  | { conectado: true; nome: string; escolas: string[] }
+  | { conectado: false; pendente: true; pedido: PedidoConexao; nomeDev: string };
+export type SituacaoPedido =
+  | { status: "conectado"; nome: string | null; escolas: string[] }
+  | { status: "pendente"; pedido: PedidoConexao }
+  | { status: "expirado" | "cancelado" | "nenhum" };
 
 export interface TurmaDiario {
   id: string;
@@ -84,7 +100,9 @@ export const nomeTurmaDiario = (t: TurmaDiario) => `${t.serie} ${t.nome}`.replac
 
 export const diarioApi = {
   status: () => api<SituacaoDiario>("/diario"),
-  conectar: (cpf: string, senha: string) => chamar<SituacaoDiario>("/diario/conectar", "POST", { cpf, senha }),
+  conectar: (cpf: string, senha: string) => chamar<RespostaConectar>("/diario/conectar", "POST", { cpf, senha }),
+  pedido: () => chamar<SituacaoPedido>("/diario/pedido", "GET"),
+  cancelarPedido: () => api<{ ok: true }>("/diario/pedido", { method: "DELETE" }),
   desconectar: () => api<{ conectado: false }>("/diario/conectar", { method: "DELETE" }),
   turmas: (ano?: string) => chamar<TurmaDiario[]>(`/diario/turmas${ano ? `?ano=${ano}` : ""}`, "GET"),
   verificar: (turma: string, data: string) =>

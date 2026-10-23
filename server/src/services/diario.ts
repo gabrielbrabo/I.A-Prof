@@ -84,8 +84,23 @@ export interface AlunosDiario {
   nivel?: string;
 }
 
+// Pedido de conexao (aprovado pelo professor dentro do D.E.V em ate 5 minutos)
+export interface PedidoDiario {
+  id: string;
+  status: "pendente" | "aprovado" | "entregue" | "cancelado" | "expirado";
+  expiraEm: string;
+  agora: string; // relogio do D.E.V
+}
+export type VinculoDiario =
+  | { token: string; nome: string; escolas: string[]; pendente?: undefined }
+  | { pendente: true; pedido: PedidoDiario; emailDev: string; nome: string; token?: undefined };
+
 export const diario = {
-  vincular: (cpf: string, senha: string) => chamar<{ token: string; nome: string; escolas: string[] }>("POST", "/vincular", { cpf, senha }),
+  // e-mail da conta do I.A Prof igual ao do D.E.V: devolve o token; diferente: devolve um pedido para aprovar no D.E.V
+  vincular: (cpf: string, senha: string, conta?: { email: string; nome: string }) =>
+    chamar<VinculoDiario>("POST", "/vincular", { cpf, senha, email: conta?.email, nome: conta?.nome }),
+  pedido: (id: string) => chamar<PedidoDiario & { token?: string; nome?: string; escolas?: string[] }>("GET", `/pedidos/${encodeURIComponent(id)}`),
+  cancelarPedido: (id: string) => chamar<{ ok: boolean }>("POST", `/pedidos/${encodeURIComponent(id)}/cancelar`),
   turmas: (token: string, ano?: string) => chamar<{ nome: string; turmas: TurmaDiario[] }>("GET", `/turmas${ano ? `?ano=${encodeURIComponent(ano)}` : ""}`, undefined, token),
   verificarAula: (token: string, idTurma: string, data: string) =>
     chamar<{ podeRegistrar: boolean; motivo?: string; existe: boolean; id: string | null; descricao: string | null }>(

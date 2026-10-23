@@ -1,5 +1,118 @@
-import { useState } from "react";
-import { diarioApi, SituacaoDiario } from "../api/diario";
+import { useEffect, useRef, useState } from "react";
+import { diarioApi, PedidoConexao, SituacaoDiario } from "../api/diario";
+
+const fmtTempo = (ms: number) => {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+};
+
+// Aguardando o professor aprovar a conexao dentro do D.E.V (e-mails diferentes): contador de 5 minutos e passo a passo
+function AguardandoAprovacao({
+  pedido,
+  nomeDev,
+  onConectou,
+  onRefazer,
+  onCancelar,
+}: {
+  pedido: PedidoConexao;
+  nomeDev?: string | null;
+  onConectou: (nome: string | null, escolas: string[]) => void;
+  onRefazer: () => void;
+  onCancelar: () => void;
+}) {
+  const diferenca = useRef(new Date(pedido.agora).getTime() - Date.now());
+  const [resta, setResta] = useState(() => new Date(pedido.expiraEm).getTime() - (Date.now() + diferenca.current));
+  const [expirou, setExpirou] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  // contador
+  useEffect(() => {
+    const t = window.setInterval(() => setResta(new Date(pedido.expiraEm).getTime() - (Date.now() + diferenca.current)), 1000);
+    return () => window.clearInterval(t);
+  }, [pedido.expiraEm]);
+
+  // pergunta ao servidor a cada 3 s se o professor ja aprovou no D.E.V
+  useEffect(() => {
+    let vivo = true;
+    const ver = async () => {
+      try {
+        const r = await diarioApi.pedido();
+        if (!vivo) return;
+        if (r.status === "conectado") onConectou(r.nome, r.escolas);
+        else if (r.status !== "pendente") setExpirou(true);
+      } catch (e) {
+        if (vivo) setErro(e instanceof Error ? e.message : "Erro ao verificar a conexão");
+      }
+    };
+    const t = window.setInterval(ver, 3000);
+    return () => {
+      vivo = false;
+      window.clearInterval(t);
+    };
+  }, [onConectou]);
+
+  const acabou = expirou || resta <= 0;
+  if (acabou) {
+    return (
+      <div className="mt-2 space-y-3">
+        <p className="rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+          ⏰ <b>O tempo para aprovar acabou.</b> Sem problema: peça de novo e aprove no D.E.V em até 5 minutos.
+        </p>
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancelar} className="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">
+            Fechar
+          </button>
+          <button onClick={onRefazer} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+            Pedir de novo
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2 space-y-3">
+      <p className="text-sm text-slate-700">
+        <b>Falta só um passo!</b> O e-mail da sua conta do I.A Prof é diferente do e-mail cadastrado no D.E.V
+        {pedido.emailDev ? (
+          <>
+            {" "}
+            (<b>{pedido.emailDev}</b>)
+          </>
+        ) : null}
+        . Por segurança, {nomeDev ? <b>{nomeDev}</b> : "você"} precisa aprovar a conexão dentro do D.E.V.
+      </p>
+      <div className="rounded-xl bg-indigo-50 px-4 py-3 text-center">
+        <p className="text-xs text-indigo-800">Tempo para aprovar no D.E.V</p>
+        <p className={`text-3xl font-extrabold tabular-nums ${resta <= 60000 ? "text-rose-600" : "text-indigo-700"}`}>{fmtTempo(resta)}</p>
+      </div>
+      <ol className="space-y-2 text-sm text-slate-700">
+        {[
+          <>Abra o <b>D.E.V</b> em outra aba do navegador ou no celular.</>,
+          <>Entre com o seu <b>CPF</b> e <b>senha</b>, como faz todo dia.</>,
+          <>Vai aparecer a janela <b>“Conectar o I.A Prof ao seu D.E.V?”</b>. Toque em <b>Aprovar conexão com o I.A Prof</b>.</>,
+          <>Volte para esta tela: a conexão aparece sozinha em alguns segundos.</>,
+        ].map((passo, i) => (
+          <li key={i} className="flex gap-2">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">{i + 1}</span>
+            <span className="pt-0.5">{passo}</span>
+          </li>
+        ))}
+      </ol>
+      <p className="text-[11px] text-slate-500">
+        Já estava com o D.E.V aberto? Espere uns segundos ou atualize a página do D.E.V (tecla F5 no computador). Não feche esta tela.
+      </p>
+      <p className="flex items-center gap-2 text-xs text-slate-500">
+        <span className="inline-block h-2 w-2 rounded-full bg-indigo-500 motion-safe:animate-pulse" /> Esperando a aprovação no D.E.V…
+      </p>
+      {erro && <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{erro}</p>}
+      <div className="flex justify-end">
+        <button onClick={onCancelar} className="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">
+          Cancelar pedido
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const campo =
   "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
@@ -18,6 +131,16 @@ export function ModalConectarDiario({
   const [senha, setSenha] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  // pedido de conexao aguardando aprovacao no D.E.V (tambem quando reabre a janela com um pedido em aberto)
+  const [pedido, setPedido] = useState<PedidoConexao | null>(situacao.pedido ?? null);
+  const [nomeDev, setNomeDev] = useState<string | null>(null);
+  const [conectou, setConectou] = useState(false);
+
+  const aoConectar = useRef((nome: string | null, escolas: string[]) => {
+    setPedido(null);
+    setConectou(true);
+    onMudou({ ...situacao, conectado: true, nome, escolas, pedido: null });
+  });
 
   async function conectar(e: React.FormEvent) {
     e.preventDefault();
@@ -25,7 +148,15 @@ export function ModalConectarDiario({
     setEnviando(true);
     try {
       const r = await diarioApi.conectar(cpf, senha);
-      onMudou({ ...situacao, ...r, conectado: true });
+      setSenha("");
+      // e-mail diferente do D.E.V: mostra AGORA o contador e o passo a passo (a janela nao fecha)
+      if ("pendente" in r && r.pendente) {
+        setPedido(r.pedido);
+        setNomeDev(r.nomeDev);
+        onMudou({ ...situacao, pedido: r.pedido });
+        return;
+      }
+      onMudou({ ...situacao, ...r, conectado: true, pedido: null });
       onFechar();
     } catch (e2) {
       setErro(e2 instanceof Error ? e2.message : "Não foi possível conectar");
@@ -48,10 +179,37 @@ export function ModalConectarDiario({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={() => !enviando && onFechar()}>
-      <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={() => !enviando && !pedido && onFechar()}>
+      <div className="max-h-[92vh] w-full max-w-sm overflow-y-auto rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <p className="text-base font-semibold text-slate-800">📒 D.E.V</p>
-        {!situacao.disponivel ? (
+        {conectou ? (
+          <>
+            <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
+              ✅ <b>Pronto! Seu D.E.V está conectado.</b> Agora suas turmas aparecem no I.A Prof e as aulas e notas podem ir direto para o diário.
+            </p>
+            <div className="mt-4 flex justify-end">
+              <button onClick={onFechar} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+                Fechar
+              </button>
+            </div>
+          </>
+        ) : pedido && !situacao.conectado ? (
+          <AguardandoAprovacao
+            pedido={pedido}
+            nomeDev={nomeDev}
+            onConectou={aoConectar.current}
+            onRefazer={() => {
+              setPedido(null);
+              onMudou({ ...situacao, pedido: null });
+            }}
+            onCancelar={() => {
+              void diarioApi.cancelarPedido().catch(() => {});
+              setPedido(null);
+              onMudou({ ...situacao, pedido: null });
+              onFechar();
+            }}
+          />
+        ) : !situacao.disponivel ? (
           <>
             <p className="mt-2 text-sm text-slate-700">A conexão com o D.E.V ainda não está disponível.</p>
             <p className="mt-1 text-xs text-slate-500">
@@ -84,6 +242,10 @@ export function ModalConectarDiario({
           <form onSubmit={conectar}>
             <p className="mt-1 text-xs text-slate-500">
               Entre com o mesmo CPF e senha que você usa no D.E.V. Assim o I.A Prof mostra suas turmas e envia a aula pronta para o diário.
+            </p>
+            <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+              Se o e-mail da sua conta do I.A Prof for o mesmo cadastrado no D.E.V, conecta na hora. Se for diferente, você vai precisar aprovar a conexão
+              dentro do D.E.V (leva 1 minuto; mostramos o passo a passo).
             </p>
             <label className="mt-3 block text-xs font-medium text-slate-500">
               CPF

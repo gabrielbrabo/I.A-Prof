@@ -52,6 +52,8 @@ router.get("/config", h(reg.config));
 router.get("/diario", h(dia.status));
 router.post("/diario/conectar", h(dia.conectar));
 router.delete("/diario/conectar", h(dia.desconectar));
+router.get("/diario/pedido", h(dia.situacaoPedido));
+router.delete("/diario/pedido", h(dia.cancelarPedido));
 router.get("/diario/turmas", h(dia.turmas));
 router.get("/diario/verificar", h(dia.verificar));
 router.post("/diario/enviar", h(dia.enviar));
