@@ -25,6 +25,7 @@ import Turmas from "./components/atividades/Turmas";
 import Configuracoes, { BoasVindas, configCompleta } from "./components/Configuracoes";
 import { Atividade } from "./api/atividades";
 import { reais } from "./api/conta";
+import WhatsAppButton from "./components/WhatsAppButton";
 
 const QTD_PERIODOS: Record<TipoPeriodo, number> = { bimestre: 4, trimestre: 3, semestre: 2 };
 
@@ -47,8 +48,13 @@ export default function App() {
     window.addEventListener("iaprof:sair", saiu);
     return () => window.removeEventListener("iaprof:sair", saiu);
   }, []);
-  if (!logado) return <Entrar onEntrou={() => setLogado(true)} />;
-  return <Painel />;
+  // Botao de suporte via WhatsApp fixo em todas as telas (inclusive login)
+  return (
+    <>
+      {logado ? <Painel /> : <Entrar onEntrou={() => setLogado(true)} />}
+      <WhatsAppButton />
+    </>
+  );
 }
 
 function Painel() {
@@ -472,7 +478,7 @@ function Painel() {
         </div>
       )}
 
-      <main className="mx-auto max-w-5xl px-3 pb-10 pt-4 sm:px-4 md:py-6">
+      <main className="mx-auto max-w-5xl px-3 pb-24 pt-4 sm:px-4 md:py-6">
         {/* Uso no topo do Gerar aula: no teste grátis mostra aulas e dias; assinante vê o uso de I.A do mês */}
         {situacao && (aba === "registro" || aba === "atividade" || aba === "atividades") && (() => {
           const teste = situacao.acesso === "teste";
