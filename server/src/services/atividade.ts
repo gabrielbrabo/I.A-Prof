@@ -469,12 +469,13 @@ export async function gerarAtividade(p: {
   professor?: string | null;
   preferencias?: string; // o que a I.A aprendeu do professor
   semNota?: boolean; // atividade sem nota (so exercicio)
+  uf?: string | null; // estado do professor (plano oficial do estado quando ele nao cadastrou o plano)
 }) {
   // Habilidades do plano de curso do periodo, do mesmo componente
   let habilidadesPlano: Array<{ codigo: string; habilidade: string }> = [];
   try {
     if (!p.periodo || !p.componente.trim()) throw new Error("sem periodo/materia"); // sem periodo: so o pedido
-    const ctx = await periodoDoPlano(p.usuario, p.ano, p.anoLetivo, p.periodo, p.turma);
+    const ctx = await periodoDoPlano(p.usuario, p.ano, p.anoLetivo, p.periodo, p.turma, p.uf);
     habilidadesPlano = ctx.itens
       .filter((i) => mesmoComponente(i.componente, p.componente))
       .map((i) => ({ codigo: String(i.codigo), habilidade: String(i.habilidade) }));

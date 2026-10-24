@@ -96,6 +96,17 @@ export interface AlunosDiario {
   nivel?: string;
 }
 
+// Serie do D.E.V ("4º ANO", "1ª SÉRIE EM", "PRÉ II") -> valor da serie no I.A Prof ("4", "EM", "EI03")
+export function anoDaSerie(serie: string | null | undefined): string | null {
+  const s = (serie ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+  if (!s) return null;
+  if (/MEDIO|\bEM\b|SERIE/.test(s)) return "EM";
+  if (/PRE|INFANTIL\s*(4|5)|4\s*ANOS|5\s*ANOS/.test(s)) return "EI03";
+  if (/BERCARIO|BEBE|\b0\s*A\s*1/.test(s)) return "EI01";
+  if (/MATERNAL|CRECHE|\b[23]\s*ANOS/.test(s)) return "EI02";
+  const m = s.match(/\b([1-9])\s*(º|°|O|ª)?\s*ANO/);
+  return m ? m[1] : null;
+}
 export const nomeTurmaDiario = (t: TurmaDiario) => `${t.serie} ${t.nome}`.replace(/\s+/g, " ").trim();
 
 export const diarioApi = {

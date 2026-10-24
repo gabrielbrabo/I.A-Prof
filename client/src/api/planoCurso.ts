@@ -32,6 +32,10 @@ export interface PlanoCurso {
   tipoPeriodo: TipoPeriodo;
   periodos: PeriodoPlano[];
   arquivos?: string[];
+  // so no plano "efetivo" (aulas e atividades): meu = cadastrado pelo professor; base = plano oficial do estado
+  // (ex.: SEE-MG, por bimestre); bncc = habilidades do ano (sem divisao oficial por bimestre)
+  origem?: "meu" | "base" | "bncc";
+  fonte?: string | null;
 }
 
 export interface ResultadoExtracao {
@@ -100,9 +104,12 @@ export const planoApi = {
   padrao: (tipo: TipoPeriodo, anoLetivo: number) =>
     api<PeriodoPlano[]>(`/planos-curso/padrao?tipo=${tipo}&anoLetivo=${anoLetivo}`),
 
-  obter: (ano: string, anoLetivo: number, turma?: string) => {
+  // efetivo: sem plano do professor, devolve o plano oficial do estado (uf) ou as habilidades do ano (BNCC)
+  obter: (ano: string, anoLetivo: number, turma?: string, opcoes?: { efetivo?: boolean; uf?: string | null }) => {
     const qs = new URLSearchParams({ ano, anoLetivo: String(anoLetivo) });
     if (turma) qs.set("turma", turma);
+    if (opcoes?.efetivo) qs.set("efetivo", "1");
+    if (opcoes?.uf && /^[A-Z]{2}$/i.test(opcoes.uf)) qs.set("uf", opcoes.uf.toUpperCase());
     return api<PlanoCurso | null>(`/planos-curso?${qs.toString()}`);
   },
 

@@ -2,7 +2,7 @@ import SeloConsumo from "../SeloConsumo";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { gravarRascunhoAtividade, lerRascunhoAtividade, RascunhoAtividade } from "../../lib/rascunhoAtividade";
 import { Atividade, atividadesApi, ImagemAtividade, miniatura, PontosPeriodo, Questao, reduzirFoto, semImagensSobrando, TIPOS_DEV, TipoDev, Turma, turmasApi } from "../../api/atividades";
-import { diarioApi, nomeTurmaDiario, SituacaoDiario, TurmaDiario } from "../../api/diario";
+import { diarioApi, nomeTurmaDiario, anoDaSerie, SituacaoDiario, TurmaDiario } from "../../api/diario";
 import { planoApi, PlanoCurso } from "../../api/planoCurso";
 import { ANOS } from "../../lib/formatarRegistro";
 import { mesmoComponente } from "../../lib/componente";
@@ -273,6 +273,13 @@ function GerarAtividadeTela({
   const exigeDev = devNotas && valeNota; // turma do D.E.V com nota: periodo e materia do D.E.V obrigatorios
   const temCorrecoes = !!editar && (editar.corrigidas ?? 0) > 0;
 
+  // a serie acompanha a turma escolhida (D.E.V ou turma do I.A Prof com serie): habilidades/plano dessa serie
+  useEffect(() => {
+    if (editar) return;
+    const a = turmaDev ? anoDaSerie(turmaDev.serie) : locais.find((t) => `t:${t._id}` === turmaChave)?.ano ?? null;
+    if (a && a !== ano) setAno(a);
+  }, [turmaChave, turmaDev?.id, locais]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // nome da turma quando as listas chegam
   useEffect(() => {
     if (turmaNome || !turmaChave) return;
@@ -286,7 +293,7 @@ function GerarAtividadeTela({
     if (!ano) return setPlano(null);
     setCarregandoPlano(true);
     planoApi
-      .obter(ano, anoLetivo)
+      .obter(ano, anoLetivo, undefined, { efetivo: true, uf: lerPref("uf", "") })
       .then(setPlano)
       .catch(() => setPlano(null))
       .finally(() => setCarregandoPlano(false));
@@ -381,6 +388,7 @@ function GerarAtividadeTela({
         diarioTurmaId: exigeDev && turmaDev ? turmaDev.id : null,
         diarioMateriaId: exigeDev ? materiaDev || null : null,
         atividadeId: atividade?._id ?? null,
+        uf: /^[A-Z]{2}$/.test(lerPref("uf", "")) ? lerPref("uf", "") : null,
       });
       onUsouIA();
       if (r.status === "perguntas") {
@@ -489,7 +497,7 @@ function GerarAtividadeTela({
 
   const dadosBase = (): Omit<Atividade, "titulo" | "instrucoes" | "questoes" | "habilidades"> => ({
     ano,
-    uf: null,
+    uf: /^[A-Z]{2}$/.test(lerPref("uf", "")) ? lerPref("uf", "") : null,
     anoLetivo,
     periodo,
     componente: componente.trim(),
@@ -591,6 +599,20 @@ function GerarAtividadeTela({
       )}
       {atividade && (
         <div className="space-y-4 rounded-xl border-2 border-indigo-200 bg-indigo-50/30 p-3 sm:p-4">
+          {/* Atividade gerada com a base do sistema (sem plano do professor): precisao menor nas habilidades */}
+          {!ehExterna && usouPlano !== false && (plano?.origem === "base" || plano?.origem === "bncc") && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-semibold">⚠️ Confira as habilidades antes de salvar</p>
+              <p className="mt-1 text-xs leading-relaxed">
+                Como você ainda não cadastrou o seu plano de curso, as habilidades desta atividade vieram da base do sistema ({plano.fonte}). Por isso, elas podem
+                não ser exatamente as que a sua escola definiu para este período. Para que as habilidades saiam sempre certas,{" "}
+                <button type="button" onClick={onIrPlano} className="font-semibold underline">
+                  cadastre o seu plano de curso
+                </button>
+                .
+              </p>
+            </div>
+          )}
           <div className="rounded-xl bg-emerald-50 p-3 ring-1 ring-emerald-200 sm:p-4" data-tour="ativ-pronta">
             <p className="text-base font-bold text-emerald-900">
               ✅ {editar ? "Atividade aberta para editar" : ehExterna ? "Gabarito pronto para conferir!" : "Atividade gerada!"} Agora confira:
@@ -891,6 +913,16 @@ function GerarAtividadeTela({
             </button>
           )}
         </div>
+        {!carregandoPlano && (plano?.origem === "base" || plano?.origem === "bncc") && (
+          <div className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            ⚠️ Não há plano de curso do {ANOS.find((a) => a.valor === ano)?.nome ?? ano} em {anoLetivo}. Usando <b>provisoriamente</b>{" "}
+            {plano.origem === "base" ? `o ${plano.fonte}` : `as habilidades da ${plano.fonte}`}.{" "}
+            <button type="button" onClick={onIrPlano} className="font-semibold underline">
+              Cadastre o plano de curso
+            </button>{" "}
+            e ele passa a valer 100%.
+          </div>
+        )}
         {!ano || !periodo || !componente.trim() ? (
           <p className="text-xs text-slate-500">Escolha a série, o período e a matéria para ver as habilidades do plano de curso.</p>
         ) : carregandoPlano ? (

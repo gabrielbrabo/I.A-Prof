@@ -556,9 +556,10 @@ function Painel() {
         {aba === "registro" && !editando && !ocultarPassos && (() => {
           const passos = [
             { feito: configCompleta(), titulo: "Configure seus dados", acao: "Configurar", ir: () => ir("config") },
+            // plano de curso continua obrigatorio: sem ele a I.A Prof usa a base (oficial do estado/BNCC) so provisoriamente
             { feito: configCompleta() && (faltaPlano == null || !faltaPlano.startsWith("Nenhum")), titulo: "Envie o plano de curso", acao: "Enviar plano", ir: () => ir("plano", "aulas") },
+            { feito: !!diario?.conectado, titulo: "Conecte ao D.E.V (opcional)", acao: "Conectar", ir: () => setModalDiario(true), opcional: true, dev: true },
             { feito: primeiraAula, titulo: "Gere e salve sua primeira aula", acao: "", ir: () => document.getElementById("texto-aula")?.focus() },
-            { feito: !!diario?.conectado, titulo: "Conecte ao D.E.V (opcional)", acao: "Conectar", ir: () => setModalDiario(true), opcional: true },
           ];
           const obrigatorios = passos.filter((p) => !p.opcional);
           if (obrigatorios.every((p) => p.feito)) return null;
@@ -581,7 +582,7 @@ function Painel() {
               </div>
               <ol className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                 {passos
-                  .filter((p) => !(p.opcional && diario?.disponivel === false))
+                  .filter((p) => !(p.dev && diario?.disponivel === false))
                   .map((p, i) => (
                     <li key={p.titulo} className={`items-center gap-2 rounded-xl px-3 py-2 text-sm ${p.feito ? "hidden bg-emerald-50 text-emerald-800 sm:flex" : "flex bg-slate-50 text-slate-700"}`}>
                       <span

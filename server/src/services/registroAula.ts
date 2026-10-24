@@ -1,3 +1,4 @@
+import { planoEfetivo } from "./planoEfetivo";
 import { chamarJson } from "./ai/claude";
 import { listarComponentes, Candidata } from "./buscaHabilidades";
 import { formatarComLimite } from "../utils/formatarRegistro";
@@ -27,6 +28,8 @@ export interface InfoPlano {
   tipoPeriodo: string | null;
   periodo: number | null;
   habilidadesNoPeriodo: number;
+  origem?: "meu" | "base" | "bncc"; // plano do professor, plano oficial do estado ou habilidades do ano (BNCC)
+  fonte?: string | null;
 }
 
 export interface ResultadoRegistro {
@@ -196,23 +199,22 @@ interface PeriodoLean {
 }
 
 // Periodo do plano de curso escolhido pelo professor. Erro claro se nao houver plano para ele.
-export async function periodoDoPlano(usuario: string, ano: string, anoLetivo: number, periodo: number, turma?: string | null) {
-  const plano =
-    (turma ? await PlanoCurso.findOne({ usuario, ano, anoLetivo, turma }).lean() : null) ??
-    (await PlanoCurso.findOne({ usuario, ano, anoLetivo }).sort({ updatedAt: -1 }).lean());
+// Sem plano do professor: usa o plano oficial do estado ou as habilidades do ano (BNCC) — ver planoEfetivo.
+export async function periodoDoPlano(usuario: string, ano: string, anoLetivo: number, periodo: number, turma?: string | null, uf?: string | null) {
+  const plano = await planoEfetivo({ usuario, ano, anoLetivo, turma, uf });
   if (!plano) throw new ErroRegistro(`Não há plano de curso para ${nomeAno(ano)} em ${anoLetivo}. Cadastre na aba Plano de curso.`);
   const p = (plano.periodos as PeriodoLean[]).find((x) => x.numero === periodo);
   const itens = (p?.itens ?? []).filter((i) => i.codigo && i.habilidade);
   if (!p || !itens.length) throw new ErroRegistro(`O plano de curso não tem habilidades no ${periodo}º ${plano.tipoPeriodo}.`);
   // Todos os codigos do plano do ano (o professor pode escolher A MAO habilidades de outros periodos)
   const doAno = (plano.periodos as PeriodoLean[]).flatMap((x) => x.itens).filter((i) => i.codigo);
-  return { tipoPeriodo: plano.tipoPeriodo, periodo: p, itens, doAno };
+  return { tipoPeriodo: plano.tipoPeriodo, periodo: p, itens, doAno, origem: plano.origem, fonte: plano.fonte };
 }
 
 // Codigos que NAO estao no plano de curso do ano (usado ao salvar).
 // A I.A so escolhe do periodo da aula; o professor pode incluir a mao habilidades de outros periodos do plano.
-export async function codigosForaDoPeriodo(p: { usuario: string; ano: string; anoLetivo: number; periodo: number; turma?: string | null; codigos: string[] }) {
-  const ctx = await periodoDoPlano(p.usuario, p.ano, p.anoLetivo, p.periodo, p.turma);
+export async function codigosForaDoPeriodo(p: { usuario: string; ano: string; anoLetivo: number; periodo: number; turma?: string | null; uf?: string | null; codigos: string[] }) {
+  const ctx = await periodoDoPlano(p.usuario, p.ano, p.anoLetivo, p.periodo, p.turma, p.uf);
   const doAno = new Set(ctx.doAno.map((i) => String(i.codigo).toUpperCase()));
   return { fora: [...new Set(p.codigos.map((c) => c.toUpperCase()))].filter((c) => !doAno.has(c)), tipoPeriodo: ctx.tipoPeriodo };
 }
@@ -262,12 +264,14 @@ export async function gerarRegistroAula(params: {
   periodo: number;
   limiteSaida?: number | null;
 }): Promise<ResultadoRegistro> {
-  const ctx = await periodoDoPlano(params.usuario, params.ano, params.anoLetivo, params.periodo, params.turma);
+  const ctx = await periodoDoPlano(params.usuario, params.ano, params.anoLetivo, params.periodo, params.turma, params.uf);
   const plano: InfoPlano = {
     usado: true,
     tipoPeriodo: ctx.tipoPeriodo,
     periodo: ctx.periodo.numero,
     habilidadesNoPeriodo: ctx.itens.length,
+    origem: ctx.origem,
+    fonte: ctx.fonte,
   };
 
   // Componentes: os do plano no periodo + os da base (para reconhecer o que o professor escreveu)

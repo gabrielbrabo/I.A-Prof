@@ -8,7 +8,7 @@ import { ANOS, UFS, formatarComLimite } from "../lib/formatarRegistro";
 import { sincronizarTexto } from "../lib/sincronizarTexto";
 import { mesmoComponente } from "../lib/componente";
 import ItemCard from "./ItemCard";
-import { diarioApi, ErroAulaNoDiario, ErroReconectarDiario, nomeTurmaDiario, SituacaoDiario, TurmaDiario, VerificacaoDiario } from "../api/diario";
+import { diarioApi, ErroAulaNoDiario, ErroReconectarDiario, nomeTurmaDiario, anoDaSerie, SituacaoDiario, TurmaDiario, VerificacaoDiario } from "../api/diario";
 import { ModalConflitoDiario } from "./Diario";
 import { lerPref, gravarPref, chaveDoUsuario, ufParaApi } from "../lib/prefs";
 
@@ -203,7 +203,15 @@ export default function RegistroAula({
   function escolherTurmaDiario(id: string) {
     setDiarioTurmaId(id);
     const t = turmasDiario?.find((x) => x.id === id);
-    if (t) setTurma(nomeTurmaDiario(t));
+    if (t) {
+      setTurma(nomeTurmaDiario(t));
+      // a serie acompanha a turma: o plano de curso/habilidades passam a ser os dessa serie
+      const a = anoDaSerie(t.serie);
+      if (a && a !== ano) {
+        mudar(setAno, "ano")(a);
+        gravarPref(`diarioTurma.${a}`, id);
+      }
+    }
     else if (id === "outra") setTurma("");
   }
 
@@ -294,7 +302,7 @@ export default function RegistroAula({
     setPlano(null);
     setPeriodo(0);
     planoApi
-      .obter(ano, anoLetivo)
+      .obter(ano, anoLetivo, undefined, { efetivo: true, uf })
       .then((p) => {
         if (!ativo) return;
         setPlano(p);
@@ -318,7 +326,7 @@ export default function RegistroAula({
       ativo = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ano, anoLetivo]);
+  }, [ano, anoLetivo, uf]);
 
 
   const periodosDisponiveis = (plano?.periodos ?? []).filter((x) => x.itens.some((i) => i.codigo));
@@ -759,7 +767,22 @@ export default function RegistroAula({
           <b>Plano de aulas › Plano de curso</b> para gerar aulas — as habilidades usadas vêm do plano do período.
         </div>
       )}
-      {periodo > 0 && (
+      {/* Sem plano do professor: de onde vem as habilidades */}
+      {/* Sem plano do professor: alerta continua; a base (oficial do estado/BNCC) vale so provisoriamente */}
+      {!carregandoPlano && (plano?.origem === "base" || plano?.origem === "bncc") && (
+        <div className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800" data-tour="origem-plano">
+          ⚠️ Não há plano de curso do <b>{ANOS.find((a) => a.valor === ano)?.nome}</b> em <b>{anoLetivo}</b>. Cadastre o plano em{" "}
+          <b>Plano de aulas › Plano de curso</b>.
+          <span className="mt-1 block text-xs">
+            {plano.origem === "base"
+              ? <>Enquanto isso, a I.A Prof usa <b>provisoriamente</b> o <b>{plano.fonte}</b>, com as habilidades oficiais de cada bimestre.</>
+              : <>Enquanto isso, a I.A Prof usa <b>provisoriamente</b> as habilidades da <b>{plano.fonte}</b>
+                  {uf && uf !== "BNCC" ? ` (o seu estado, ${uf}, ainda não tem a divisão oficial por bimestre no I.A Prof)` : ""} e escolhe as que combinam com o que você trabalhou.</>}{" "}
+            Quando você cadastrar o seu plano, ele passa a valer 100%.
+          </span>
+        </div>
+      )}
+      {periodo > 0 && plano?.origem !== "bncc" && (
         <p className="-mt-2 text-xs text-slate-500">
           Usando as {habilidadesPeriodo.length} habilidades do plano de curso do {periodo}º {plano?.tipoPeriodo}.
         </p>
@@ -854,12 +877,25 @@ export default function RegistroAula({
 
 
       {/* Revisao */}
-      {itens && planoInfo && (
+      {/* Aula gerada com a base do sistema (sem plano do professor): avisa que a precisao e menor */}
+      {itens && planoInfo?.usado && (planoInfo.origem === "base" || planoInfo.origem === "bncc") && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-semibold">⚠️ Confira as habilidades antes de salvar</p>
+          <p className="mt-1 text-xs leading-relaxed">
+            Como você ainda não cadastrou o seu plano de curso, a I.A usou a base do sistema ({planoInfo.fonte}) para escolher as habilidades desta aula. Por
+            isso, elas podem não ser exatamente as que a sua escola definiu para este período. Para que as habilidades saiam sempre certas, cadastre o seu plano
+            de curso em <b>Plano de aulas › Plano de curso</b>.
+          </p>
+        </div>
+      )}
+      {itens && planoInfo && !(planoInfo.usado && (planoInfo.origem === "base" || planoInfo.origem === "bncc")) && (
         <div
           className={`rounded-lg px-4 py-2 text-xs ${planoInfo.usado ? "bg-indigo-50 text-indigo-700" : "bg-slate-100 text-slate-600"}`}
         >
-          {planoInfo.usado
-            ? `📘 Usando o plano de curso: ${planoInfo.periodo}º ${planoInfo.tipoPeriodo} (${planoInfo.habilidadesNoPeriodo} habilidades). Só habilidades desse período são usadas.`
+          {planoInfo.usado && planoInfo.origem === "bncc"
+            ? `📘 Habilidades do ano (${planoInfo.fonte}): a I.A escolheu as que combinam com a aula. Confira os códigos.`
+            : planoInfo.usado
+            ? `📘 Usando ${planoInfo.origem === "base" ? `o ${planoInfo.fonte}` : "o plano de curso"}: ${planoInfo.periodo}º ${planoInfo.tipoPeriodo} (${planoInfo.habilidadesNoPeriodo} habilidades). Só habilidades desse período são usadas.`
             : "Sem plano de curso para esta série/ano letivo. Cadastre em Plano de aulas › Plano de curso para a I.A priorizar as habilidades do período."}
         </div>
       )}

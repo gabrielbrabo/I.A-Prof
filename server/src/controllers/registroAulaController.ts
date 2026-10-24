@@ -84,7 +84,7 @@ async function validarHabilidades(d: z.infer<typeof salvarSchema> & { usuario: s
   if (!d.anoLetivo || !d.periodo) return "Selecione o período da aula.";
   const codigos = d.itens.flatMap((i) => i.habilidades.map((h) => h.codigo));
   try {
-    const { fora, tipoPeriodo } = await codigosForaDoPeriodo({ usuario: d.usuario, ano: d.ano, anoLetivo: d.anoLetivo, periodo: d.periodo, turma: d.turma, codigos });
+    const { fora, tipoPeriodo } = await codigosForaDoPeriodo({ usuario: d.usuario, ano: d.ano, anoLetivo: d.anoLetivo, periodo: d.periodo, turma: d.turma, uf: d.uf, codigos });
     if (fora.length) {
       return `${fora.join(", ")} não ${fora.length > 1 ? "estão" : "está"} no plano de curso de ${d.anoLetivo} (nenhum ${tipoPeriodo}). Troque ou remova antes de salvar.`;
     }

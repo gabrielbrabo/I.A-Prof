@@ -35,6 +35,8 @@ export interface InfoPlano {
   tipoPeriodo: string | null;
   periodo: number | null;
   habilidadesNoPeriodo: number;
+  origem?: "meu" | "base" | "bncc";
+  fonte?: string | null;
 }
 
 export interface ResultadoGerar {

@@ -1,3 +1,4 @@
+import { planoEfetivo } from "../services/planoEfetivo";
 import path from "path";
 import { Request, Response } from "express";
 import multer from "multer";
@@ -274,9 +275,13 @@ export async function salvar(req: Request, res: Response) {
 // GET /api/planos-curso?ano=4&anoLetivo=2026&turma=... -> plano salvo (ou null)
 export async function obter(req: Request, res: Response) {
   const p = z
-    .object({ ano: z.string().min(1), anoLetivo: z.coerce.number().int(), turma: z.string().optional() })
+    .object({ ano: z.string().min(1), anoLetivo: z.coerce.number().int(), turma: z.string().optional(), efetivo: z.string().optional(), uf: z.string().optional() })
     .safeParse(req.query);
   if (!p.success) return res.status(400).json({ message: "Informe ano e anoLetivo" });
+  // efetivo=1 (aulas e atividades): sem plano do professor, devolve o plano oficial do estado ou as habilidades do ano (BNCC)
+  if (p.data.efetivo === "1") {
+    return res.json(await planoEfetivo({ usuario: req.usuarioId!, ano: p.data.ano, anoLetivo: p.data.anoLetivo, turma: p.data.turma || null, uf: p.data.uf || null }));
+  }
   const plano = await PlanoCurso.findOne({ usuario: req.usuarioId, ano: p.data.ano, anoLetivo: p.data.anoLetivo, turma: p.data.turma || null }).lean();
   res.json(plano);
 }

@@ -211,6 +211,7 @@ export const atividadesApi = {
     diarioTurmaId?: string | null; // D.E.V: o servidor confere os pontos do periodo
     diarioMateriaId?: string | null;
     atividadeId?: string | null;
+    uf?: string | null;
   }) =>
     api<{
       status: "pronta" | "perguntas";
