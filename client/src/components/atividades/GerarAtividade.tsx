@@ -7,6 +7,9 @@ import { planoApi, PlanoCurso } from "../../api/planoCurso";
 import { ANOS } from "../../lib/formatarRegistro";
 import { mesmoComponente } from "../../lib/componente";
 import { gravarPref, lerPref } from "../../lib/prefs";
+import { divisaoAtual, Divisao } from "../../lib/divisao";
+import SeletorDivisao from "../SeletorDivisao";
+import CampoUf from "../CampoUf";
 import { ErroApi } from "../../lib/sessao";
 import EditorAtividade, { escolherImagens, problemasGabarito } from "./EditorAtividade";
 import { baixarPdf, htmlDaAtividade, imprimirAtividade, imprimirGabarito } from "./impressao";
@@ -288,25 +291,30 @@ function GerarAtividadeTela({
     if (l) setTurmaNome(l.nome);
   }, [turmaChave, turmaDev, locais, turmaNome]);
 
+  // divisao do ano usada quando nao ha plano do professor (padrao da UF; trocavel junto do Periodo)
+  const [divisao, setDivisao] = useState<Divisao>(() => divisaoAtual());
+  const [uf, setUf] = useState(() => lerPref("uf", ""));
   // Plano de curso da serie no ano letivo (o mesmo das aulas): periodos e habilidades
   useEffect(() => {
     if (!ano) return setPlano(null);
     setCarregandoPlano(true);
     planoApi
-      .obter(ano, anoLetivo, undefined, { efetivo: true, uf: lerPref("uf", "") })
+      .obter(ano, anoLetivo, undefined, { efetivo: true, uf, divisao })
       .then(setPlano)
       .catch(() => setPlano(null))
       .finally(() => setCarregandoPlano(false));
-  }, [ano, anoLetivo]);
+  }, [ano, anoLetivo, uf, divisao]);
   const tipoPeriodo = plano?.tipoPeriodo ?? "bimestre";
   const qtdPeriodos = tipoPeriodo === "trimestre" ? 3 : tipoPeriodo === "semestre" ? 2 : 4;
   const itensPeriodo = (plano?.periodos.find((x) => x.numero === periodo)?.itens ?? []).filter((i) => i.codigo && i.habilidade);
   // materias do plano no periodo (sugestoes quando o professor digita)
-  const materiasPlano = [...new Set(itensPeriodo.map((i) => i.componente))];
+  const materiasPlano = [
+    ...new Set((periodo > 0 ? itensPeriodo : (plano?.periodos ?? []).flatMap((x) => x.itens).filter((i) => i.codigo && i.habilidade)).map((i) => i.componente)),
+  ].sort((a, b) => a.localeCompare(b, "pt-BR"));
   // sem D.E.V: com periodo e plano de curso, a materia vem da lista do plano ("Outra" deixa digitar)
   const [materiaOutra, setMateriaOutra] = useState(false);
   const materiaDoPlano = materiasPlano.find((c) => mesmoComponente(c, componente)) ?? "";
-  const listaMaterias = periodo > 0 && materiasPlano.length > 0 && !materiaOutra && (!componente.trim() || !!materiaDoPlano);
+  const listaMaterias = materiasPlano.length > 0 && !materiaOutra && (!componente.trim() || !!materiaDoPlano);
   // habilidades do periodo + materia: o professor escolhe quais a atividade vai ter
   const habilidadesDisp = componente.trim() ? itensPeriodo.filter((i) => mesmoComponente(i.componente, componente)) : [];
   const codigosDisp = habilidadesDisp.map((h) => h.codigo!);
@@ -388,7 +396,8 @@ function GerarAtividadeTela({
         diarioTurmaId: exigeDev && turmaDev ? turmaDev.id : null,
         diarioMateriaId: exigeDev ? materiaDev || null : null,
         atividadeId: atividade?._id ?? null,
-        uf: /^[A-Z]{2}$/.test(lerPref("uf", "")) ? lerPref("uf", "") : null,
+        uf: /^[A-Z]{2}$/.test(uf) ? uf : null,
+        divisao,
       });
       onUsouIA();
       if (r.status === "perguntas") {
@@ -497,7 +506,7 @@ function GerarAtividadeTela({
 
   const dadosBase = (): Omit<Atividade, "titulo" | "instrucoes" | "questoes" | "habilidades"> => ({
     ano,
-    uf: /^[A-Z]{2}$/.test(lerPref("uf", "")) ? lerPref("uf", "") : null,
+    uf: /^[A-Z]{2}$/.test(uf) ? uf : null,
     anoLetivo,
     periodo,
     componente: componente.trim(),
@@ -704,6 +713,14 @@ function GerarAtividadeTela({
       )}
 
       <div className="grid grid-cols-2 gap-x-3 gap-y-3 rounded-xl border border-slate-200 bg-white p-3 sm:p-4 lg:grid-cols-4" data-tour="ativ-campos">
+        <CampoUf
+          valor={uf}
+          className={campo}
+          onChange={(u, d) => {
+            setUf(u);
+            setDivisao(d);
+          }}
+        />
         <div className="min-w-0" data-tour="ativ-serie">
           <label className="text-xs font-medium text-slate-500">Série</label>
           <select className={`${campo} ${!ano ? "border-amber-400 bg-amber-50" : ""}`} value={ano} onChange={(e) => setAno(e.target.value)}>
@@ -744,6 +761,7 @@ function GerarAtividadeTela({
               </option>
             ))}
           </select>
+          {!carregandoPlano && (plano?.origem === "base" || plano?.origem === "bncc") && <SeletorDivisao valor={divisao} uf={uf} onChange={setDivisao} />}
         </div>
         <div className="col-span-2 min-w-0" data-tour="ativ-materia">
           <label className="text-xs font-medium text-slate-500">{exigeDev ? "Matéria * (do D.E.V)" : "Matéria (opcional)"}</label>

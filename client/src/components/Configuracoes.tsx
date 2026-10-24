@@ -2,6 +2,7 @@ import { useState } from "react";
 import { SituacaoDiario } from "../api/diario";
 import { ANOS, UFS } from "../lib/formatarRegistro";
 import { gravarPref, lerPref } from "../lib/prefs";
+import { divisaoAtual, divisaoDaUf, Divisao } from "../lib/divisao";
 
 // Configuracoes do professor (ficam salvas neste aparelho, por conta):
 // nome no diario, serie principal, estado (UF) e tamanho do texto do diario.
@@ -16,12 +17,14 @@ export interface DadosConfig {
   professor: string;
   ano: string;
   uf: string;
+  divisao: Divisao;
   limiteSaida: string;
 }
 export const lerConfig = (nomePadrao = ""): DadosConfig => ({
   professor: lerPref("professor", "\u0000") === "\u0000" ? nomePadrao : lerPref("professor", ""),
   ano: lerPref("ano", ""),
   uf: lerPref("uf", ""),
+  divisao: divisaoAtual(),
   limiteSaida: lerPref("limiteSaida", "") || String(LIMITE_PADRAO),
 });
 export const configCompleta = () => !!lerPref("ano", "") && !!lerPref("uf", "");
@@ -29,6 +32,7 @@ function gravarConfig(c: DadosConfig) {
   gravarPref("professor", c.professor.trim());
   if (c.ano) gravarPref("ano", c.ano);
   if (c.uf) gravarPref("uf", c.uf);
+  gravarPref("divisao", c.divisao);
   gravarPref("limiteSaida", c.limiteSaida);
 }
 
@@ -75,7 +79,7 @@ function CamposConfig({
             </label>
             <label className="block text-sm font-medium text-slate-700">
               Seu estado
-              <select className={campo} value={valor.uf} onChange={(e) => set({ uf: e.target.value })}>
+              <select className={campo} value={valor.uf} onChange={(e) => set({ uf: e.target.value, divisao: divisaoDaUf(e.target.value) })}>
                 <option value="">Escolha o estado…</option>
                 <option value="BNCC">Só BNCC (nacional)</option>
                 {UFS.map((u) => (
@@ -83,6 +87,18 @@ function CamposConfig({
                 ))}
               </select>
               <span className="mt-1 block text-xs font-normal text-slate-500">Para reconhecer os códigos do currículo do seu estado.</span>
+            </label>
+            <label className="block text-sm font-medium text-slate-700 sm:col-span-2">
+              Divisão do ano letivo
+              <select className={campo} value={valor.divisao} onChange={(e) => set({ divisao: e.target.value as Divisao })}>
+                <option value="bimestre">Bimestres (4)</option>
+                <option value="trimestre">Trimestres (3)</option>
+                <option value="semestre">Semestres (2)</option>
+              </select>
+              <span className="mt-1 block text-xs font-normal text-slate-500">
+                Preenchida pelo seu estado (rede estadual). Se a sua escola usa outra divisão (ex.: escola municipal), troque aqui. Quando você cadastrar o seu
+                plano de curso, vale a divisão dele.
+              </span>
             </label>
           </div>
         </>

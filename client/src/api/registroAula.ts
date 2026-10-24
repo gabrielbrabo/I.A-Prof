@@ -74,6 +74,7 @@ export interface RegistroSalvo {
   turma?: string | null;
   ano: string;
   uf?: string | null;
+  divisao?: string | null; // divisao do ano (sem plano do professor)
   data: string;
   entrada: string;
   textoFinal: string;
@@ -108,6 +109,7 @@ export const registroApi = {
     texto: string;
     ano: string;
     uf?: string | null;
+    divisao?: string | null;
     turma?: string | null;
     data?: string | null;
     anoLetivo: number;

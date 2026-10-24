@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import { connectDb } from "../config/db";
 import { PlanoBase } from "../models/PlanoBase";
 import { lerArquivoSemIA, montarItens, Achado } from "../services/planoSemIA";
+import { divisaoDaUf, QTD_PERIODOS } from "../utils/divisao";
 
 // Importa o plano de curso OFICIAL de um estado (ex.: cadernos "Plano de Curso" da SEE-MG), um PDF por serie.
 // Assim o professor que nao cadastrou o proprio plano usa as habilidades certas de cada bimestre.
@@ -24,8 +25,10 @@ async function main() {
   const anoLetivo = Number(arg("anoLetivo"));
   const fonte = arg("fonte") || `Plano de Curso ${uf} ${anoLetivo}`;
   const conferir = process.argv.includes("--conferir");
+  // divisao do ano da rede (MG/ES/PR/RS 2026 = trimestre); --tipo bimestre|trimestre|semestre troca
+  const tipo = divisaoDaUf(uf, arg("tipo"));
   if (!pasta || !uf || !anoLetivo) {
-    console.error('Uso: npm run import:planobase -- --pasta <pasta com PDFs> --uf MG --anoLetivo 2026 [--fonte "..."] [--conferir]');
+    console.error('Uso: npm run import:planobase -- --pasta <pasta com PDFs> --uf MG --anoLetivo 2026 [--fonte "..."] [--tipo trimestre] [--conferir]');
     process.exit(1);
   }
   const arquivos = fs.readdirSync(pasta).filter((f) => /\.(pdf|docx|xlsx|txt)$/i.test(f));
@@ -43,14 +46,14 @@ async function main() {
       continue;
     }
     const semPeriodo = r.achados.filter((a) => !a.periodo).length;
-    console.log(`- ${f}: série ${serie}, ${r.achados.length} habilidades lidas${semPeriodo ? `, ${semPeriodo} SEM bimestre (não entram)` : ""}`);
+    console.log(`- ${f}: série ${serie}, ${r.achados.length} habilidades lidas${semPeriodo ? `, ${semPeriodo} SEM período (não entram)` : ""}`);
     porSerie.set(serie, [...(porSerie.get(serie) ?? []), ...r.achados]);
   }
 
   if (!conferir) await connectDb();
   for (const [serie, achados] of [...porSerie].sort()) {
     const periodos = [];
-    for (let n = 1; n <= 4; n++) {
+    for (let n = 1; n <= QTD_PERIODOS[tipo]; n++) {
       const itens = (await montarItens(achados.filter((a) => a.periodo === n), uf))
         .filter((i) => i.codigo && i.habilidade)
         .map((i) => ({ componente: i.componente, codigo: i.codigo!, habilidade: i.habilidade!, conteudo: i.conteudo ?? null }));
@@ -59,7 +62,7 @@ async function main() {
     const resumo = periodos.map((p) => `${p.numero}º: ${p.itens.length}`).join(" · ");
     console.log(`> ${serie}º ano — ${resumo}`);
     if (conferir) continue;
-    await PlanoBase.updateOne({ uf, ano: serie, anoLetivo }, { $set: { uf, ano: serie, anoLetivo, fonte, tipoPeriodo: "bimestre", periodos } }, { upsert: true });
+    await PlanoBase.updateOne({ uf, ano: serie, anoLetivo }, { $set: { uf, ano: serie, anoLetivo, fonte, tipoPeriodo: tipo, periodos } }, { upsert: true });
   }
   if (!conferir) await mongoose.disconnect();
   console.log(conferir ? "Conferência pronta (nada gravado)." : "Importado.");

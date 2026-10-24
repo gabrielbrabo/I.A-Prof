@@ -23,6 +23,7 @@ const arred = (n: number) => Math.round(n * 100) / 100;
 const gerarSchema = z.object({
   ano: z.string().min(1),
   uf: z.string().length(2).nullish(),
+  divisao: z.enum(["bimestre", "trimestre", "semestre"]).nullish(),
   anoLetivo: z.number().int().min(2000).max(2100),
   periodo: z.number().int().min(0).max(4).default(0), // 0 = sem periodo
   componente: z.string().trim().max(80).default(""),

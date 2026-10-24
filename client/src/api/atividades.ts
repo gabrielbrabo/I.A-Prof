@@ -212,6 +212,7 @@ export const atividadesApi = {
     diarioMateriaId?: string | null;
     atividadeId?: string | null;
     uf?: string | null;
+    divisao?: string | null;
   }) =>
     api<{
       status: "pronta" | "perguntas";

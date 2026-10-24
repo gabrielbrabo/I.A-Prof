@@ -11,6 +11,9 @@ import ItemCard from "./ItemCard";
 import { diarioApi, ErroAulaNoDiario, ErroReconectarDiario, nomeTurmaDiario, anoDaSerie, SituacaoDiario, TurmaDiario, VerificacaoDiario } from "../api/diario";
 import { ModalConflitoDiario } from "./Diario";
 import { lerPref, gravarPref, chaveDoUsuario, ufParaApi } from "../lib/prefs";
+import { divisaoAtual, Divisao } from "../lib/divisao";
+import SeletorDivisao from "./SeletorDivisao";
+import CampoUf from "./CampoUf";
 
 const hoje = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD no fuso local
 
@@ -103,6 +106,8 @@ export default function RegistroAula({
   const [ano, setAno] = useState(() => editando?.ano ?? lerPref("ano", ""));
   // Turma: depois da primeira aula salva, o nome fica guardado para aquela serie (preenche sozinho)
   const [turma, setTurma] = useState(() => editando?.turma ?? rascunho?.turma ?? lerPref(`turma.${editando?.ano ?? lerPref("ano", "")}`, ""));
+  // divisao do ano usada quando nao ha plano do professor (padrao da UF; trocavel junto do Periodo)
+  const [divisao, setDivisao] = useState<Divisao>(() => divisaoAtual());
   const [uf, setUf] = useState(() => (editando ? editando.uf || "BNCC" : lerPref("uf", "")));
   const [data, setData] = useState(() => editando?.data ?? rascunho?.data ?? hoje());
   const [texto, setTexto] = useState(() => editando?.entrada ?? rascunho?.texto ?? "");
@@ -302,7 +307,7 @@ export default function RegistroAula({
     setPlano(null);
     setPeriodo(0);
     planoApi
-      .obter(ano, anoLetivo, undefined, { efetivo: true, uf })
+      .obter(ano, anoLetivo, undefined, { efetivo: true, uf, divisao })
       .then((p) => {
         if (!ativo) return;
         setPlano(p);
@@ -326,7 +331,7 @@ export default function RegistroAula({
       ativo = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ano, anoLetivo, uf]);
+  }, [ano, anoLetivo, uf, divisao]);
 
 
   const periodosDisponiveis = (plano?.periodos ?? []).filter((x) => x.itens.some((i) => i.codigo));
@@ -439,7 +444,7 @@ export default function RegistroAula({
     setAviso(null);
     setGerando(true);
     try {
-      const r = await registroApi.gerar({ texto, ano, uf: ufParaApi(uf), turma: turma.trim() || null, data, anoLetivo, periodo, limiteSaida: limiteNum });
+      const r = await registroApi.gerar({ texto, ano, uf: ufParaApi(uf), divisao, turma: turma.trim() || null, data, anoLetivo, periodo, limiteSaida: limiteNum });
       setPlanoInfo(r.plano);
       setEditandoTexto(false);
       setAbertura(r.abertura ?? []);
@@ -499,6 +504,7 @@ export default function RegistroAula({
         diarioTurmaId: idTurmaDiario,
         ano,
         uf: ufParaApi(uf),
+        divisao,
         data,
         entrada: texto,
         anoLetivo,
@@ -631,7 +637,16 @@ export default function RegistroAula({
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">1</span>
         Dados da aula
       </p>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <CampoUf
+          valor={uf}
+          className={campo}
+          rotuloClassName="flex h-5 items-center text-xs font-medium text-slate-500"
+          onChange={(u, d) => {
+            setUf(u);
+            setDivisao(d);
+          }}
+        />
         <div className="min-w-0" data-tour="serie">
           <label className="flex h-5 items-center text-xs font-medium text-slate-500">Série</label>
           <select
@@ -731,6 +746,7 @@ export default function RegistroAula({
               </option>
             ))}
           </select>
+          {!carregandoPlano && (plano?.origem === "base" || plano?.origem === "bncc") && <SeletorDivisao valor={divisao} uf={uf} onChange={setDivisao} />}
         </div>
       </div>
       </div>
@@ -775,9 +791,9 @@ export default function RegistroAula({
           <b>Plano de aulas › Plano de curso</b>.
           <span className="mt-1 block text-xs">
             {plano.origem === "base"
-              ? <>Enquanto isso, a I.A Prof usa <b>provisoriamente</b> o <b>{plano.fonte}</b>, com as habilidades oficiais de cada bimestre.</>
+              ? <>Enquanto isso, a I.A Prof usa <b>provisoriamente</b> o <b>{plano.fonte}</b>, com as habilidades oficiais de cada {plano.tipoPeriodo}.</>
               : <>Enquanto isso, a I.A Prof usa <b>provisoriamente</b> as habilidades da <b>{plano.fonte}</b>
-                  {uf && uf !== "BNCC" ? ` (o seu estado, ${uf}, ainda não tem a divisão oficial por bimestre no I.A Prof)` : ""} e escolhe as que combinam com o que você trabalhou.</>}{" "}
+                  {uf && uf !== "BNCC" ? ` (o seu estado, ${uf}, ainda não tem as habilidades divididas por ${plano.tipoPeriodo} no I.A Prof)` : ""} e escolhe as que combinam com o que você trabalhou.</>}{" "}
             Quando você cadastrar o seu plano, ele passa a valer 100%.
           </span>
         </div>

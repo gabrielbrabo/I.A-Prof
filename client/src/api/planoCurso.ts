@@ -105,11 +105,12 @@ export const planoApi = {
     api<PeriodoPlano[]>(`/planos-curso/padrao?tipo=${tipo}&anoLetivo=${anoLetivo}`),
 
   // efetivo: sem plano do professor, devolve o plano oficial do estado (uf) ou as habilidades do ano (BNCC)
-  obter: (ano: string, anoLetivo: number, turma?: string, opcoes?: { efetivo?: boolean; uf?: string | null }) => {
+  obter: (ano: string, anoLetivo: number, turma?: string, opcoes?: { efetivo?: boolean; uf?: string | null; divisao?: string | null }) => {
     const qs = new URLSearchParams({ ano, anoLetivo: String(anoLetivo) });
     if (turma) qs.set("turma", turma);
     if (opcoes?.efetivo) qs.set("efetivo", "1");
     if (opcoes?.uf && /^[A-Z]{2}$/i.test(opcoes.uf)) qs.set("uf", opcoes.uf.toUpperCase());
+    if (opcoes?.divisao) qs.set("divisao", opcoes.divisao);
     return api<PlanoCurso | null>(`/planos-curso?${qs.toString()}`);
   },
 

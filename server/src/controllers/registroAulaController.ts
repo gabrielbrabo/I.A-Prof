@@ -20,6 +20,7 @@ const gerarSchema = z.object({
     .max(limites.entrada, `O texto pode ter no maximo ${limites.entrada} caracteres`),
   ano: z.string().min(1),
   uf: z.string().length(2).nullish(),
+  divisao: z.enum(["bimestre", "trimestre", "semestre"]).nullish(),
   turma: z.string().nullish(),
   data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
   anoLetivo: z.number().int().min(2000).max(2100),
@@ -58,6 +59,7 @@ const salvarSchema = z.object({
   diarioTurmaId: z.string().regex(/^[a-f0-9]{24}$/i).nullish(), // turma escolhida do Diario escolar
   ano: z.string().min(1),
   uf: z.string().length(2).nullish(),
+  divisao: z.enum(["bimestre", "trimestre", "semestre"]).nullish(),
   data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   entrada: z.string().min(1).max(limites.entrada),
   anoLetivo: z.number().int().nullish(),
@@ -84,7 +86,7 @@ async function validarHabilidades(d: z.infer<typeof salvarSchema> & { usuario: s
   if (!d.anoLetivo || !d.periodo) return "Selecione o período da aula.";
   const codigos = d.itens.flatMap((i) => i.habilidades.map((h) => h.codigo));
   try {
-    const { fora, tipoPeriodo } = await codigosForaDoPeriodo({ usuario: d.usuario, ano: d.ano, anoLetivo: d.anoLetivo, periodo: d.periodo, turma: d.turma, uf: d.uf, codigos });
+    const { fora, tipoPeriodo } = await codigosForaDoPeriodo({ usuario: d.usuario, ano: d.ano, anoLetivo: d.anoLetivo, periodo: d.periodo, turma: d.turma, uf: d.uf, divisao: d.divisao, codigos });
     if (fora.length) {
       return `${fora.join(", ")} não ${fora.length > 1 ? "estão" : "está"} no plano de curso de ${d.anoLetivo} (nenhum ${tipoPeriodo}). Troque ou remova antes de salvar.`;
     }

@@ -2,6 +2,7 @@ import { PlanoCurso } from "../models/PlanoCurso";
 import { PlanoBase } from "../models/PlanoBase";
 import { Habilidade } from "../models/Habilidade";
 import { nomeAno } from "../utils/anos";
+import { divisaoDaUf, QTD_PERIODOS } from "../utils/divisao";
 
 // De onde vem as habilidades da aula/atividade, nesta ordem:
 //  1. "meu":  o plano de curso que o professor cadastrou (como sempre foi)
@@ -29,7 +30,7 @@ export interface PlanoEfetivo {
   fonte: string | null; // ex.: "Plano de Curso SEE-MG 2026", "BNCC"
 }
 
-export async function planoEfetivo(p: { usuario: string; ano: string; anoLetivo: number; turma?: string | null; uf?: string | null }): Promise<PlanoEfetivo | null> {
+export async function planoEfetivo(p: { usuario: string; ano: string; anoLetivo: number; turma?: string | null; uf?: string | null; divisao?: string | null }): Promise<PlanoEfetivo | null> {
   // 1. plano do professor
   const meu =
     (p.turma ? await PlanoCurso.findOne({ usuario: p.usuario, ano: p.ano, anoLetivo: p.anoLetivo, turma: p.turma }).lean() : null) ??
@@ -58,8 +59,17 @@ export async function planoEfetivo(p: { usuario: string; ano: string; anoLetivo:
   // 3. habilidades do ano: curriculo do estado (se importado) ou BNCC — o mesmo conjunto em todos os periodos
   // vale para todas as series: Educacao Infantil (EI01-03), 1o ao 9o ano e Ensino Medio
   if (!p.ano) return null;
+  // BNCC completa (todas as materias) + codigos proprios do estado. O banco do estado pode ter so parte
+  // das materias (ex.: codigos cadastrados por planos enviados), entao ele SOMA a BNCC, nao substitui.
   const doEstado = uf ? await Habilidade.find({ anos: p.ano, uf }).lean() : [];
-  const lista = doEstado.length ? doEstado : await Habilidade.find({ anos: p.ano, uf: null }).lean();
+  const daBncc = await Habilidade.find({ anos: p.ano, uf: null }).lean();
+  const vistos = new Set<string>();
+  const lista = [...doEstado, ...daBncc].filter((h) => {
+    const c = String(h.codigo ?? "").toUpperCase();
+    if (!c || vistos.has(c)) return false;
+    vistos.add(c);
+    return true;
+  });
   if (!lista.length) return null;
   const itens: ItemEfetivo[] = lista
     .map((h) => ({ componente: h.componente, codigo: h.codigo, habilidade: h.habilidade, conteudo: h.objetoConhecimento ?? null, noBanco: true }))
@@ -68,9 +78,10 @@ export async function planoEfetivo(p: { usuario: string; ano: string; anoLetivo:
     ano: p.ano,
     anoLetivo: p.anoLetivo,
     uf,
-    tipoPeriodo: "bimestre",
-    periodos: [1, 2, 3, 4].map((numero) => ({ numero, inicio: "", fim: "", itens })),
+    // divisao do ano: a que o professor escolheu em Configuracoes, senao a da rede estadual da UF
+    tipoPeriodo: divisaoDaUf(uf, p.divisao),
+    periodos: Array.from({ length: QTD_PERIODOS[divisaoDaUf(uf, p.divisao)] }, (_, i) => ({ numero: i + 1, inicio: "", fim: "", itens })),
     origem: "bncc",
-    fonte: doEstado.length ? `Currículo de ${uf} (${nomeAno(p.ano)})` : `BNCC (${nomeAno(p.ano)})`,
+    fonte: doEstado.length ? `BNCC + currículo de ${uf} (${nomeAno(p.ano)})` : `BNCC (${nomeAno(p.ano)})`,
   };
 }
