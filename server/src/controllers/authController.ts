@@ -56,7 +56,7 @@ export async function login(req: Request, res: Response) {
 export async function eu(req: Request, res: Response) {
   const u = await Usuario.findById(req.usuarioId).lean();
   if (!u) return res.status(401).json({ message: "Conta não encontrada. Faça login de novo." });
-  res.json({ usuario: publico(u), situacao: await situacaoDoUsuario(String(u._id)) });
+  res.json({ usuario: { ...publico(u), admin: env.adminEmails.includes(u.email) }, situacao: await situacaoDoUsuario(String(u._id)) });
 }
 
 // POST /api/auth/google -> entra (ou cria a conta) com o token do botao "Entrar com Google"

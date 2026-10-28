@@ -35,6 +35,8 @@ export const env = {
   googleClientId: process.env.GOOGLE_CLIENT_ID || "",
   // Custo da I.A em reais (para o limite de uso de cada plano)
   cotacaoDolar: Number(process.env.COTACAO_DOLAR || 5.3),
+  // Painel admin (so leitura): e-mails com acesso, separados por virgula. Vazio = ninguem.
+  adminEmails: (process.env.ADMIN_EMAILS || "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean),
   // Creditos extras de I.A (compra avulsa): cada R$ 1 pago vira R$ FATOR de custo real de I.A.
   // 0.5 = metade do valor pago cobre a I.A; o resto cobre taxa, imposto e margem.
   creditos: {

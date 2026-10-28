@@ -9,6 +9,7 @@ import * as dia from "../controllers/diarioController";
 import * as cred from "../controllers/creditoController";
 import * as ativ from "../controllers/atividadeController";
 import * as tur from "../controllers/turmaController";
+import * as adm from "../controllers/adminController";
 import { proteger } from "../middleware/auth";
 
 // Encaminha erros de handlers async para o tratador de erro do Express 4
@@ -33,6 +34,11 @@ router.post("/webhooks/pagamentos", h(ass.webhook));
 // ---------- Daqui para baixo: precisa estar logado ----------
 router.use(proteger);
 router.get("/auth/eu", h(auth.eu));
+
+// Painel admin (so leitura; so os e-mails de ADMIN_EMAILS)
+router.get("/admin/usuarios", adm.exigirAdmin, h(adm.usuarios));
+router.get("/admin/usuarios/:id", adm.exigirAdmin, h(adm.usuario));
+router.get("/admin/atividades/:id", adm.exigirAdmin, h(adm.atividade));
 router.get("/assinatura", h(ass.minha));
 router.post("/assinatura", h(ass.assinar));
 router.post("/assinatura/atualizar", h(ass.atualizar));

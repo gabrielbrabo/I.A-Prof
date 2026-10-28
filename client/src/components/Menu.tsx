@@ -1,6 +1,6 @@
 // Navegacao por FERRAMENTAS: cada ferramenta e um botao no topo (celular: barra de baixo)
 // com seus sub-botoes logo abaixo do cabecalho. Para uma ferramenta nova, acrescente um item em FERRAMENTAS.
-export type Tela = "registro" | "plano" | "historico" | "atividade" | "atividades" | "turmas" | "assinatura" | "config";
+export type Tela = "registro" | "plano" | "historico" | "atividade" | "atividades" | "turmas" | "assinatura" | "config" | "admin";
 
 export interface ItemFerramenta {
   id: Tela;

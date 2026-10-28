@@ -26,6 +26,7 @@ import Configuracoes, { BoasVindas, configCompleta } from "./components/Configur
 import { Atividade } from "./api/atividades";
 import { reais } from "./api/conta";
 import WhatsAppButton from "./components/WhatsAppButton";
+import Admin from "./components/Admin";
 
 const QTD_PERIODOS: Record<TipoPeriodo, number> = { bimestre: 4, trimestre: 3, semestre: 2 };
 
@@ -320,6 +321,16 @@ function Painel() {
               <span>❓</span>
               <span className="hidden lg:inline">Como usar</span>
             </button>
+            {usuario?.admin && (
+              <button
+                onClick={() => ir("admin")}
+                title="Painel admin"
+                aria-label="Painel admin"
+                className={`hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg text-base md:inline-flex ${aba === "admin" ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-slate-100"}`}
+              >
+                🔒
+              </button>
+            )}
             <button
               data-tour="config"
               onClick={() => ir("config")}
@@ -447,6 +458,17 @@ function Painel() {
                 <span className="flex-1">Minha assinatura</span>
                 {selo(alertaAssinatura, false)}
               </button>
+              {usuario?.admin && (
+                <button
+                  onClick={() => irMenu("admin")}
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium ${
+                    aba === "admin" ? "bg-indigo-600 text-white" : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  <span className="text-base">🔒</span>
+                  <span className="flex-1">Painel admin</span>
+                </button>
+              )}
               <button
                 onClick={() => irMenu("config")}
                 className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium ${
@@ -728,6 +750,7 @@ function Painel() {
             />
           ))}
         {aba === "turmas" && <Turmas diario={diario} onAbrirDiario={() => setModalDiario(true)} />}
+        {aba === "admin" && usuario?.admin && <Admin />}
         {aba === "config" && (
           <Configuracoes
             professorNome={usuario?.nome}

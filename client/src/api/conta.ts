@@ -4,6 +4,7 @@ export interface Usuario {
   id: string;
   nome: string;
   email: string;
+  admin?: boolean; // painel admin (so leitura)
 }
 
 export interface Situacao {
