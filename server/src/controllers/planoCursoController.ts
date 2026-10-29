@@ -4,6 +4,7 @@ import { Request, Response } from "express";
 import multer from "multer";
 import { z } from "zod";
 import { PlanoCurso } from "../models/PlanoCurso";
+import { EnvioPlano } from "../models/EnvioPlano";
 import { EXTENSOES_ACEITAS } from "../services/arquivoParaIA";
 import { Achado, lerArquivoSemIA, montarItens } from "../services/planoSemIA";
 import {
@@ -41,6 +42,8 @@ const extrairSchema = z.object({
   uf: z.string().length(2).optional().or(z.literal("")),
   tipoPeriodo: tipoSchema,
   periodo: z.string().optional(), // "todos" ou numero do periodo
+  anoLetivo: z.coerce.number().int().optional(),
+  turma: z.string().max(80).optional(),
   permitirIA: z.string().optional(), // ignorado: a leitura do plano nao usa mais I.A
 });
 
@@ -86,11 +89,33 @@ export async function extrair(req: Request, res: Response) {
 
     const nomes = arquivos.map((a) => a.originalname);
     const precisaIA = !achados.length;
+    // registro do envio (painel admin): como o professor enviou e o que o documento dizia
+    const noDoc = [...new Set(achados.map((x) => x.periodo).filter((x): x is number => x != null))].sort((a, b) => a - b);
+    const registrar = (resultado: "ok" | "recusado", mensagem: string | null, lidos: Array<{ numero: number; itens: unknown[] }> = []) =>
+      EnvioPlano.create({
+        usuario: req.usuarioId,
+        ano: p.data.ano,
+        anoLetivo: p.data.anoLetivo ?? null,
+        turma: p.data.turma || null,
+        tipoPeriodo: tipo,
+        modo: periodoAlvo === "todos" ? "ano" : "periodo",
+        periodoEscolhido: periodoAlvo === "todos" ? null : periodoAlvo,
+        arquivos: nomes,
+        periodosNoDocumento: noDoc,
+        periodosLidos: lidos.filter((x) => x.itens.length).map((x) => x.numero),
+        habilidades: lidos.reduce((t, x) => t + x.itens.length, 0),
+        resultado,
+        mensagem,
+      }).catch(() => undefined);
+    const recusar = async (corpo: { message: string; [k: string]: unknown }) => {
+      await registrar("recusado", corpo.message);
+      return res.status(422).json(corpo);
+    };
 
     // ---------- Plano de UM periodo: nunca usa IA ----------
     if (typeof periodoAlvo === "number") {
       if (precisaIA) {
-        return res.status(422).json({
+        return recusar({
           message: semTexto.length
             ? `Não foi possível ler o texto de: ${semTexto.join(", ")} (foto ou PDF escaneado). Envie o arquivo em PDF com texto, Word ou Excel, ou adicione as habilidades manualmente.`
             : "Nenhum código de habilidade (ex.: EF04MA30MG) foi encontrado no documento. Adicione as habilidades manualmente.",
@@ -101,7 +126,7 @@ export async function extrair(req: Request, res: Response) {
       const periodosDoc = [...new Set(achados.map((x) => x.periodo).filter((x): x is number => x != null))];
       const nomeUnid = [...unidades][0] ?? tipo;
       if (periodosDoc.length && !periodosDoc.includes(periodoAlvo)) {
-        return res.status(422).json({
+        return recusar({
           message: `O documento é do ${periodosDoc.map((n) => `${n}º`).join(", ")} ${nomeUnid}, mas você escolheu o ${periodoAlvo}º. Escolha o período certo antes de enviar o arquivo.`,
         });
       }
@@ -125,6 +150,7 @@ export async function extrair(req: Request, res: Response) {
       const avisoPeriodo = deOutroPeriodo.length
         ? `O documento também tem habilidades de outro(s) ${nomeUnid}(s) (${periodosDoc.filter((n) => n !== periodoAlvo).map((n) => `${n}º`).join(", ")}). Só entraram as do ${periodoAlvo}º; ${deOutroPeriodo.length} ficaram de fora: ${deOutroPeriodo.join(", ")}.`
         : null;
+      await registrar("ok", [modoErrado?.mensagem, avisoPeriodo].filter(Boolean).join(" ") || null, [{ numero: periodoAlvo, itens }]);
       return res.json({
         metodo: "sem-ia",
         versaoLeitura: VERSAO_LEITURA,
@@ -145,14 +171,14 @@ export async function extrair(req: Request, res: Response) {
     if (!precisaIA) {
       // O documento precisa dizer em qual periodo esta cada habilidade (ex.: titulo "2º TRIMESTRE")
       if (unidades.size && !unidades.has(tipo)) {
-        return res.status(422).json({
+        return recusar({
           message: `O documento está dividido em ${[...unidades].join("/")}s, mas você escolheu ${tipo}s. Ajuste a "Divisão do ano" e envie de novo.`,
         });
       }
       const comPeriodo = achados.filter((x) => x.periodo != null && x.periodo >= 1 && x.periodo <= qtd);
       const semPeriodo = [...new Set(achados.filter((x) => !comPeriodo.includes(x)).map((x) => x.codigo))];
       if (!comPeriodo.length) {
-        return res.status(422).json({
+        return recusar({
           message: `O documento não indica em qual ${tipo} está cada habilidade. O arquivo precisa ter títulos como "1º ${tipo}", "2º ${tipo}" antes das habilidades de cada período. Outra opção: use "Um arquivo com o plano de cada período" e envie um arquivo para cada ${tipo}.`,
           // sem nenhum periodo marcado: quase sempre e o arquivo de UM periodo enviado no lugar do ano inteiro
           modoErrado: {
@@ -175,6 +201,7 @@ export async function extrair(req: Request, res: Response) {
               mensagem: `Este arquivo parece ter só o ${periodos[0].numero}º ${tipo}. Se você tem um arquivo para cada ${tipo}, escolha "Um arquivo com o plano de cada período" e envie cada arquivo no seu ${tipo}.`,
             }
           : null;
+      await registrar("ok", modoErrado?.mensagem ?? (semPeriodo.length ? `${semPeriodo.length} habilidade(s) sem período indicado no documento ficaram de fora.` : null), periodos);
       return res.json({
         modoErrado,
         metodo: "sem-ia",
@@ -193,7 +220,7 @@ export async function extrair(req: Request, res: Response) {
 
     // Sem texto legivel ou sem codigos: a leitura do plano NAO usa I.A (economia).
     // O professor envia outro formato ou adiciona as habilidades manualmente.
-    return res.status(422).json({
+    return recusar({
       message: semTexto.length
         ? `Não foi possível ler o texto de: ${semTexto.join(", ")} (foto ou PDF escaneado). Envie o plano em PDF com texto, Word ou Excel, ou adicione as habilidades manualmente em cada período.`
         : "Nenhum código de habilidade (ex.: EF04MA01) foi encontrado no documento. Confira o arquivo ou adicione as habilidades manualmente em cada período.",

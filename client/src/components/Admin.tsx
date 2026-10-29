@@ -282,8 +282,21 @@ function DetalheUsuario({ id, onVoltar }: { id: string; onVoltar: () => void }) 
                     {nomeSerie(p.ano)} · {p.anoLetivo}
                   </b>
                   {p.turma ? ` · ${p.turma}` : ""} · {p.tipoPeriodo}
-                  <p className="text-xs text-slate-600">{p.periodos.map((x) => `${x.numero}º: ${x.habilidades} habilidades`).join(" · ")}</p>
-                  {p.arquivos.length > 0 && <p className="mt-0.5 text-xs text-slate-500">Arquivo(s): {p.arquivos.join(", ")}</p>}
+                  <p className="mt-1 text-xs">
+                    <b>Como enviou:</b> {p.forma}
+                  </p>
+                  <ul className="mt-1.5 grid grid-cols-1 gap-1 sm:grid-cols-2">
+                    {p.periodos.map((x) => (
+                      <li key={x.numero} className={`rounded-lg px-2 py-1 text-xs ${x.habilidades ? "bg-slate-50 text-slate-700" : "bg-amber-50 text-amber-800"}`}>
+                        <b>
+                          {x.numero}º {p.tipoPeriodo}:
+                        </b>{" "}
+                        {x.habilidades} habilidade(s)
+                        {x.manuais ? ` (${x.manuais} à mão)` : ""}
+                        {x.arquivos.length ? <span className="block truncate text-slate-500">🗎 {x.arquivos.join(", ")}</span> : !x.habilidades ? <span className="block">vazio</span> : null}
+                      </li>
+                    ))}
+                  </ul>
                   {p.alertas.length ? (
                     <ul className="mt-2 space-y-1">
                       {p.alertas.map((a) => (
@@ -298,6 +311,27 @@ function DetalheUsuario({ id, onVoltar }: { id: string; onVoltar: () => void }) 
                 </li>
               ))}
             </ul>
+          )}
+
+          {aba === "planos" && (
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <p className="text-sm font-semibold text-slate-800">🕒 Histórico de envios do plano</p>
+              {!d.envios.length && <p className="mt-1 text-xs text-slate-500">Nenhum envio de arquivo registrado.</p>}
+              <ul className="mt-2 space-y-1.5">
+                {d.envios.map((e) => (
+                  <li key={e._id} className={`rounded-lg px-2 py-1.5 text-xs ${e.resultado === "ok" ? "bg-slate-50 text-slate-700" : "bg-rose-50 text-rose-800"}`}>
+                    <b>{e.resultado === "ok" ? "✓" : "✗ Recusado"}</b> {e.em ? new Date(e.em).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : ""} · {nomeSerie(e.ano)}
+                    {e.anoLetivo ? ` · ${e.anoLetivo}` : ""} ·{" "}
+                    {e.modo === "ano" ? "plano do ano todo" : `no ${e.periodoEscolhido}º ${e.tipoPeriodo}`} · {e.arquivos.join(", ")}
+                    <span className="block text-slate-500">
+                      {e.periodosNoDocumento.length ? `Documento diz: ${e.periodosNoDocumento.map((n) => `${n}º`).join(", ")} ${e.tipoPeriodo}` : "Documento não diz o período"}
+                      {e.resultado === "ok" ? ` · ${e.habilidades} habilidade(s) lida(s)` : ""}
+                    </span>
+                    {e.mensagem && <span className="block">{e.mensagem}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
           {aba === "consumo" && (

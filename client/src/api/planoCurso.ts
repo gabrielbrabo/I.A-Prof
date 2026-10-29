@@ -122,6 +122,8 @@ export const planoApi = {
     uf?: string;
     tipoPeriodo: TipoPeriodo;
     periodo: number | "todos";
+    anoLetivo?: number;
+    turma?: string | null;
     permitirIA?: boolean;
   }) => {
     const fd = new FormData();
@@ -130,6 +132,8 @@ export const planoApi = {
     fd.append("uf", p.uf ?? "");
     fd.append("tipoPeriodo", p.tipoPeriodo);
     fd.append("periodo", String(p.periodo));
+    if (p.anoLetivo) fd.append("anoLetivo", String(p.anoLetivo));
+    if (p.turma) fd.append("turma", p.turma);
     if (p.permitirIA) fd.append("permitirIA", "1");
     const resp = await fetch(`${BASE}/planos-curso/extrair`, { method: "POST", body: fd, headers: cabecalhoAuth() });
     if (resp.status === 401) await lerResposta(resp);

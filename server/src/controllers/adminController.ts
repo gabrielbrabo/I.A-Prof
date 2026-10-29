@@ -10,7 +10,8 @@ import { PlanoCurso } from "../models/PlanoCurso";
 import { Correcao } from "../models/Correcao";
 import { AcessoAdmin } from "../models/AcessoAdmin";
 import { situacaoDoUsuario } from "../services/uso";
-import { conferirPlano } from "../services/conferenciaPlano";
+import { conferirPlano, comoFoiEnviado, EnvioRegistro } from "../services/conferenciaPlano";
+import { EnvioPlano } from "../models/EnvioPlano";
 import { diario, ErroDiario } from "../services/diario";
 
 // Painel admin SO LEITURA: ver como os professores estao usando (nada e alterado, nao gasta I.A).
@@ -62,7 +63,7 @@ async function seriesSemPlano(ids: unknown[], planos: Array<{ usuario?: unknown;
   }
   return res;
 }
-const SELECT_PLANO = "usuario ano anoLetivo turma uf tipoPeriodo arquivos periodos.numero periodos.itens.codigo updatedAt";
+const SELECT_PLANO = "usuario ano anoLetivo turma uf tipoPeriodo arquivos periodos.numero periodos.itens.codigo periodos.itens.origemTexto updatedAt";
 
 // GET /api/admin/usuarios?q= -> lista com plano, uso de I.A e quanto cada um usou
 export async function usuarios(req: Request, res: Response) {
@@ -79,6 +80,7 @@ export async function usuarios(req: Request, res: Response) {
     RegistroAula.aggregate([{ $match: { usuario: { $in: ids }, diarioEnviadoEm: { $ne: null } } }, { $group: { _id: "$usuario", n: { $sum: 1 }, ultimo: { $max: "$diarioEnviadoEm" } } }]),
   ]);
   const semPlano = await seriesSemPlano(ids, listaPlanos as never);
+  const enviosLista = await EnvioPlano.find({ usuario: { $in: ids } }).lean();
   const enviadasPor = new Map(enviadas.map((x: { _id: unknown; n: number; ultimo: Date }) => [String(x._id), x]));
   const linhas = await Promise.all(
     lista.map(async (u) => {
@@ -100,7 +102,11 @@ export async function usuarios(req: Request, res: Response) {
         dev: situacaoDev(u as DevUsuario),
         aulasNoDev: enviadasPor.get(id)?.n ?? 0,
         ultimaNoDev: enviadasPor.get(id)?.ultimo ?? null,
-        planosComAlerta: listaPlanos.filter((p) => String(p.usuario) === id && conferirPlano(p as never).length > 0).length,
+        planosComAlerta: listaPlanos.filter((p) => {
+          if (String(p.usuario) !== id) return false;
+          const meus = enviosLista.filter((e) => String(e.usuario) === id) as unknown as EnvioRegistro[];
+          return conferirPlano(p as never).length > 0 || comoFoiEnviado(p as never, meus).alertas.length > 0;
+        }).length,
         seriesSemPlano: semPlano.get(id) ?? [],
         ultimoUso: ultimos.length ? new Date(Math.max(...ultimos)) : null,
       };
@@ -124,9 +130,10 @@ export async function usuario(req: Request, res: Response) {
     Atividade.find({ usuario: id }).sort({ createdAt: -1 }).limit(60).select("titulo componente ano anoLetivo periodo turma detalhes origem semNota valorTotal habilidades createdAt questoes.tipo").lean(),
     PlanoCurso.find({ usuario: id }).sort({ anoLetivo: -1, ano: 1 }).select(SELECT_PLANO).lean(),
   ]);
-  const [semPlano, enviadas] = await Promise.all([
+  const [semPlano, enviadas, envios] = await Promise.all([
     seriesSemPlano([new mongoose.Types.ObjectId(id)], planos as never),
     RegistroAula.aggregate([{ $match: { usuario: new mongoose.Types.ObjectId(id), diarioEnviadoEm: { $ne: null } } }, { $group: { _id: null, n: { $sum: 1 }, ultimo: { $max: "$diarioEnviadoEm" } } }]),
+    EnvioPlano.find({ usuario: id }).sort({ createdAt: -1 }).limit(100).lean(),
   ]);
   // D.E.V: confere AGORA com o D.E.V se a conexao funciona (so leitura: lista as turmas)
   const sit = situacaoDev(u as DevUsuario);
@@ -169,6 +176,22 @@ export async function usuario(req: Request, res: Response) {
     seriesSemPlano: semPlano.get(id) ?? [],
     aulas,
     atividades: atividades.map((a) => ({ ...a, questoes: (a.questoes ?? []).length })),
+    envios: envios.map((e) => ({
+      _id: e._id,
+      em: (e as { createdAt?: Date }).createdAt ?? null,
+      ano: e.ano,
+      anoLetivo: e.anoLetivo,
+      turma: e.turma,
+      tipoPeriodo: e.tipoPeriodo,
+      modo: e.modo,
+      periodoEscolhido: e.periodoEscolhido,
+      arquivos: e.arquivos,
+      periodosNoDocumento: e.periodosNoDocumento,
+      periodosLidos: e.periodosLidos,
+      habilidades: e.habilidades,
+      resultado: e.resultado,
+      mensagem: e.mensagem,
+    })),
     planos: planos.map((p) => ({
       _id: p._id,
       ano: p.ano,
@@ -177,8 +200,10 @@ export async function usuario(req: Request, res: Response) {
       tipoPeriodo: p.tipoPeriodo,
       uf: p.uf,
       arquivos: p.arquivos ?? [],
-      alertas: conferirPlano(p as never),
-      periodos: (p.periodos ?? []).map((x: { numero: number; itens?: Array<{ codigo?: string | null }> }) => ({ numero: x.numero, habilidades: (x.itens ?? []).filter((i) => i.codigo).length })),
+      ...(() => {
+        const como = comoFoiEnviado(p as never, envios as unknown as EnvioRegistro[]);
+        return { forma: como.forma, periodos: como.porPeriodo, alertas: [...conferirPlano(p as never), ...como.alertas] };
+      })(),
       atualizadoEm: (p as { updatedAt?: Date }).updatedAt ?? null,
     })),
   });

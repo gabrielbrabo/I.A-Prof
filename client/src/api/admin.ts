@@ -85,7 +85,24 @@ export interface DetalheAdmin {
     tipoPeriodo: string;
     arquivos: string[];
     alertas: string[];
-    periodos: Array<{ numero: number; habilidades: number }>;
+    forma: string; // como enviou: ano todo, um arquivo por periodo, a mao...
+    periodos: Array<{ numero: number; habilidades: number; manuais: number; arquivos: string[] }>;
+  }>;
+  envios: Array<{
+    _id: string;
+    em: string | null;
+    ano: string;
+    anoLetivo: number | null;
+    turma: string | null;
+    tipoPeriodo: string;
+    modo: "ano" | "periodo";
+    periodoEscolhido: number | null;
+    arquivos: string[];
+    periodosNoDocumento: number[];
+    periodosLidos: number[];
+    habilidades: number;
+    resultado: "ok" | "recusado";
+    mensagem: string | null;
   }>;
 }
 

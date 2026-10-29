@@ -156,6 +156,8 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
         uf: ufParaApi(uf) ?? undefined,
         tipoPeriodo: tipo,
         periodo: modo === "todos" ? "todos" : periodoUpload,
+        anoLetivo,
+        turma: turma || null,
       });
       if (r.modoErrado) setModoAviso(r.modoErrado);
       // Ano todo: substitui todos os periodos. Por periodo: substitui so o escolhido.

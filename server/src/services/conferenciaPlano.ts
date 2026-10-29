@@ -73,3 +73,82 @@ export function conferirPlano(p: PlanoConferir, ufProfessor?: string | null): st
 
   return alertas;
 }
+
+// ---------- Como o professor enviou o plano (historico de envios) ----------
+export interface EnvioRegistro {
+  ano: string;
+  anoLetivo?: number | null;
+  turma?: string | null;
+  tipoPeriodo: string;
+  modo: "ano" | "periodo";
+  periodoEscolhido?: number | null;
+  arquivos: string[];
+  periodosNoDocumento: number[];
+  periodosLidos: number[];
+  habilidades: number;
+  resultado: "ok" | "recusado";
+  mensagem?: string | null;
+  createdAt?: Date;
+}
+interface PlanoComItens {
+  ano: string;
+  anoLetivo: number;
+  turma?: string | null;
+  tipoPeriodo: string;
+  arquivos?: string[];
+  periodos?: Array<{ numero: number; itens?: Array<{ codigo?: string | null; origemTexto?: string | null }> }>;
+}
+// periodo escrito no nome do arquivo: "Plano 2º bimestre.pdf", "1 TRI", "3_trimestre"
+const periodoDoNome = (nome: string) => {
+  const m = /(?:^|[^0-9])([1-4])\s*(?:º|°|o|ª)?\s*[_\- ]*(bim|tri|sem)/i.exec(nome);
+  return m ? Number(m[1]) : null;
+};
+const ord = (l: number[]) => l.map((n) => `${n}º`).join(", ").replace(/, ([^,]*)$/, " e $1");
+
+export function comoFoiEnviado(p: PlanoComItens, envios: EnvioRegistro[]) {
+  const doPlano = envios.filter((e) => e.ano === p.ano && (e.anoLetivo == null || e.anoLetivo === p.anoLetivo) && (!e.turma || !p.turma || e.turma === p.turma));
+  const ok = doPlano.filter((e) => e.resultado === "ok");
+  const okAno = ok.filter((e) => e.modo === "ano");
+  const okPer = ok.filter((e) => e.modo === "periodo");
+  const alertas: string[] = [];
+
+  const porPeriodo = (p.periodos ?? []).map((x) => {
+    const itens = (x.itens ?? []).filter((i) => i.codigo);
+    const arquivos = [
+      ...new Set([
+        ...okPer.filter((e) => e.periodoEscolhido === x.numero).flatMap((e) => e.arquivos),
+        ...okAno.filter((e) => e.periodosLidos.includes(x.numero)).flatMap((e) => e.arquivos),
+      ]),
+    ];
+    return { numero: x.numero, habilidades: itens.length, manuais: itens.filter((i) => !i.origemTexto).length, arquivos };
+  });
+
+  let forma: string;
+  if (!ok.length) {
+    const temItens = porPeriodo.some((x) => x.habilidades);
+    forma = !temItens ? "Nada enviado" : p.arquivos?.length ? `Enviado antes do registro de envios (arquivos: ${p.arquivos.join(", ")})` : "Digitado à mão (nenhum arquivo enviado)";
+  } else if (okAno.length && !okPer.length) forma = "Um arquivo com o plano do ano todo";
+  else if (okPer.length && !okAno.length) forma = `Um arquivo para cada ${p.tipoPeriodo} (enviou no ${ord([...new Set(okPer.map((e) => e.periodoEscolhido!))].sort())})`;
+  else forma = "Misto: arquivo do ano todo e arquivos por período";
+
+  // envio no periodo errado / modo errado
+  for (const e of okPer) {
+    const nomeDiz = e.arquivos.map(periodoDoNome).find((n) => n != null) ?? null;
+    if (e.periodosNoDocumento.length >= 2) alertas.push(`"${e.arquivos.join(", ")}" tem o plano de vários períodos (${ord(e.periodosNoDocumento)}), mas foi enviado só no ${e.periodoEscolhido}º ${p.tipoPeriodo}.`);
+    else if (nomeDiz && nomeDiz !== e.periodoEscolhido) alertas.push(`"${e.arquivos.join(", ")}" parece ser do ${nomeDiz}º ${p.tipoPeriodo} (pelo nome), mas foi enviado no ${e.periodoEscolhido}º.`);
+    else if (!e.periodosNoDocumento.length && !nomeDiz) alertas.push(`"${e.arquivos.join(", ")}" foi enviado no ${e.periodoEscolhido}º ${p.tipoPeriodo}, mas nem o documento nem o nome dizem de qual período é: confira se é o certo.`);
+  }
+  for (const e of okAno) if (e.periodosLidos.length === 1) alertas.push(`"${e.arquivos.join(", ")}" foi enviado como plano do ano todo, mas só tinha o ${e.periodosLidos[0]}º ${p.tipoPeriodo}.`);
+  // mesmo arquivo em dois periodos
+  const porArquivo = new Map<string, Set<number>>();
+  for (const e of okPer) for (const a of e.arquivos) porArquivo.set(a, (porArquivo.get(a) ?? new Set()).add(e.periodoEscolhido!));
+  for (const [a, ps] of porArquivo) if (ps.size > 1) alertas.push(`O mesmo arquivo "${a}" foi enviado em ${ps.size} períodos (${ord([...ps].sort())}).`);
+  // tentativas recusadas
+  const recusas = doPlano.filter((e) => e.resultado === "recusado");
+  if (recusas.length) alertas.push(`${recusas.length} envio(s) recusado(s): veja o histórico de envios.`);
+  // habilidades digitadas a mao
+  const manuais = porPeriodo.reduce((t, x) => t + x.manuais, 0);
+  if (ok.length && manuais) alertas.push(`${manuais} habilidade(s) adicionada(s) à mão, além do arquivo.`);
+
+  return { forma, porPeriodo, alertas: [...new Set(alertas)] };
+}
