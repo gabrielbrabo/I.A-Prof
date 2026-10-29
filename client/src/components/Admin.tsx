@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { adminApi, DetalheAdmin, LinhaAdmin } from "../api/admin";
+import { adminApi, DetalheAdmin, LinhaAdmin, SituacaoDev } from "../api/admin";
 import { ANOS } from "../lib/formatarRegistro";
 import { htmlDaAtividade } from "./atividades/impressao";
 
@@ -9,6 +9,14 @@ const fmtReais = (c: number) => `R$ ${(c / 100).toFixed(2).replace(".", ",")}`;
 const nomeSerie = (a: string) => ANOS.find((x) => x.valor === a)?.nome ?? a;
 const corAcesso = (a: string | null) =>
   a === "assinante" ? "bg-emerald-100 text-emerald-800" : a === "teste" ? "bg-sky-100 text-sky-800" : "bg-slate-200 text-slate-700";
+
+const DEV: Record<SituacaoDev, { rotulo: string; cor: string; explica: string }> = {
+  conectado: { rotulo: "D.E.V ✓", cor: "bg-emerald-100 text-emerald-800", explica: "Conectado ao D.E.V." },
+  conexao_antiga: { rotulo: "D.E.V: reconectar", cor: "bg-amber-100 text-amber-800", explica: "Conexão antiga (antes da trava de 1 D.E.V por conta): o app vai pedir para conectar de novo." },
+  pendente: { rotulo: "D.E.V: aguardando aprovar", cor: "bg-sky-100 text-sky-800", explica: "Pediu para conectar e falta aprovar o pedido dentro do D.E.V." },
+  desconectado: { rotulo: "D.E.V desconectado", cor: "bg-amber-100 text-amber-800", explica: "Já conectou o D.E.V antes, mas hoje está desconectado (saiu ou o D.E.V recusou o vínculo)." },
+  nunca: { rotulo: "sem D.E.V", cor: "bg-slate-100 text-slate-600", explica: "Nunca conectou o D.E.V." },
+};
 
 export default function Admin() {
   const [lista, setLista] = useState<LinhaAdmin[] | null>(null);
@@ -84,7 +92,10 @@ export default function Admin() {
                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${corAcesso(u.acesso)}`}>
                   {u.acesso === "assinante" ? u.planoNome ?? "Assinante" : u.acesso === "teste" ? "Teste" : "Sem acesso"}
                 </span>
-                {u.devConectado && <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-semibold text-indigo-800">D.E.V</span>}
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${DEV[u.dev].cor}`} title={DEV[u.dev].explica}>
+                  {DEV[u.dev].rotulo}
+                </span>
+                {u.planosComAlerta > 0 && <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-800">⚠️ plano de curso a conferir</span>}
               </div>
               <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
                 <span>⚡ I.A: {u.usoPercentual}%</span>
@@ -92,6 +103,8 @@ export default function Admin() {
                 <span>📝 {u.atividades} atividades</span>
                 <span>✅ {u.correcoes} correções</span>
                 <span className={u.planosCurso ? "" : "font-semibold text-amber-700"}>📘 {u.planosCurso ? `${u.planosCurso} plano(s) de curso` : "sem plano de curso"}</span>
+                {u.seriesSemPlano.length > 0 && <span className="font-semibold text-amber-700">usa {u.seriesSemPlano.map(nomeSerie).join(", ")} sem plano</span>}
+                {u.aulasNoDev > 0 && <span>📒 {u.aulasNoDev} aulas no D.E.V (última {fmtData(u.ultimaNoDev)})</span>}
                 <span>🕒 último uso: {fmtData(u.ultimoUso)}</span>
                 <span>cadastro: {fmtData(u.criadoEm)}</span>
               </div>
@@ -161,16 +174,39 @@ function DetalheUsuario({ id, onVoltar }: { id: string; onVoltar: () => void }) 
               )}
               <span>Teste: {d.usuario.testeAulas} aulas e {d.usuario.testeAtividades} atividades usadas · até {fmtData(d.usuario.testeAte)}</span>
               <span>Créditos extras: {fmtReais(d.usuario.creditosCentavos)}</span>
-              <span>D.E.V: {d.usuario.dev ? `${d.usuario.dev.nome ?? "conectado"} (${d.usuario.dev.escolas.join(", ")})` : "não conectado"}</span>
               <span>Cadastro: {fmtData(d.usuario.criadoEm)}</span>
             </div>
             {d.situacao?.motivo && <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{d.situacao.motivo}</p>}
           </div>
 
+          <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <b>📒 D.E.V</b>
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${DEV[d.usuario.dev.situacao].cor}`}>{DEV[d.usuario.dev.situacao].rotulo}</span>
+            </div>
+            <p className="mt-1 text-slate-600">{DEV[d.usuario.dev.situacao].explica}</p>
+            {d.usuario.dev.aoVivo && (
+              <p className={`mt-1 font-medium ${d.usuario.dev.aoVivo.ok ? "text-emerald-700" : "text-rose-700"}`}>{d.usuario.dev.aoVivo.ok ? "✓ " : "✗ "}{d.usuario.dev.aoVivo.mensagem}</p>
+            )}
+            <p className="mt-1 text-xs text-slate-500">
+              {d.usuario.dev.nome ? `${d.usuario.dev.nome}${d.usuario.dev.escolas.length ? ` (${d.usuario.dev.escolas.join(", ")})` : ""} · ` : ""}
+              {d.usuario.dev.conectadoEm ? `conectou em ${fmtData(d.usuario.dev.conectadoEm)} · ` : ""}
+              {d.usuario.dev.aulasEnviadas} aula(s) enviada(s) ao D.E.V{d.usuario.dev.ultimaEnviada ? ` · última em ${fmtData(d.usuario.dev.ultimaEnviada)}` : ""}
+            </p>
+          </div>
+
+          {(d.seriesSemPlano.length > 0 || d.planos.some((p) => p.alertas.length)) && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              <b>⚠️ Plano de curso</b>
+              {d.seriesSemPlano.length > 0 && <p className="mt-1">Gera aulas/atividades do {d.seriesSemPlano.map(nomeSerie).join(", ")} neste ano, mas não tem plano de curso dessa série (está usando a base do sistema).</p>}
+              {d.planos.some((p) => p.alertas.length) && <p className="mt-1">Há plano(s) com problema: veja a aba Planos de curso.</p>}
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-2">
             {botaoAba("aulas", `📚 Aulas (${d.aulas.length})`)}
             {botaoAba("atividades", `📝 Atividades (${d.atividades.length})`)}
-            {botaoAba("planos", `📘 Planos de curso (${d.planos.length})`)}
+            {botaoAba("planos", `📘 Planos de curso (${d.planos.length})${d.planos.some((p) => p.alertas.length) ? " ⚠️" : ""}`)}
             {botaoAba("consumo", "⚡ Consumo")}
           </div>
 
@@ -247,6 +283,18 @@ function DetalheUsuario({ id, onVoltar }: { id: string; onVoltar: () => void }) 
                   </b>
                   {p.turma ? ` · ${p.turma}` : ""} · {p.tipoPeriodo}
                   <p className="text-xs text-slate-600">{p.periodos.map((x) => `${x.numero}º: ${x.habilidades} habilidades`).join(" · ")}</p>
+                  {p.arquivos.length > 0 && <p className="mt-0.5 text-xs text-slate-500">Arquivo(s): {p.arquivos.join(", ")}</p>}
+                  {p.alertas.length ? (
+                    <ul className="mt-2 space-y-1">
+                      {p.alertas.map((a) => (
+                        <li key={a} className="rounded-lg bg-rose-50 px-2 py-1 text-xs text-rose-800">
+                          ⚠️ {a}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-xs font-medium text-emerald-700">✓ No lugar certo (série, ano letivo e períodos conferem)</p>
+                  )}
                 </li>
               ))}
             </ul>

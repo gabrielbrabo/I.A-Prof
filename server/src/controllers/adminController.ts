@@ -10,6 +10,8 @@ import { PlanoCurso } from "../models/PlanoCurso";
 import { Correcao } from "../models/Correcao";
 import { AcessoAdmin } from "../models/AcessoAdmin";
 import { situacaoDoUsuario } from "../services/uso";
+import { conferirPlano } from "../services/conferenciaPlano";
+import { diario, ErroDiario } from "../services/diario";
 
 // Painel admin SO LEITURA: ver como os professores estao usando (nada e alterado, nao gasta I.A).
 // Acesso so para os e-mails de ADMIN_EMAILS. Cada abertura de dados de um professor fica registrada.
@@ -32,13 +34,52 @@ const contarPor = async (m: mongoose.Model<any>, ids?: unknown[]) => {
   return new Map(r.map((x: { _id: unknown; n: number; ultimo: Date }) => [String(x._id), x]));
 };
 
+// Situacao do D.E.V igual a do app do professor: conectado = tem token E o D.E.V ligado a conta (diarioCpf)
+type DevUsuario = { diario?: { token?: string | null } | null; diarioCpf?: string | null; diarioPedido?: { id?: string | null; expiraEm?: Date | null } | null };
+export function situacaoDev(u: DevUsuario): "conectado" | "conexao_antiga" | "desconectado" | "pendente" | "nunca" {
+  if (u.diario?.token && u.diarioCpf) return "conectado";
+  if (u.diario?.token) return "conexao_antiga"; // antes da trava de 1 D.E.V por conta: vai pedir para conectar de novo
+  if (u.diarioPedido?.id && u.diarioPedido.expiraEm && new Date(u.diarioPedido.expiraEm).getTime() > Date.now()) return "pendente";
+  if (u.diarioCpf) return "desconectado"; // ja conectou antes e hoje esta desconectado
+  return "nunca";
+}
+
+// Series que o professor usou (aulas e atividades do ano letivo atual) sem plano de curso dessa serie
+async function seriesSemPlano(ids: unknown[], planos: Array<{ usuario?: unknown; ano: string; anoLetivo: number }>) {
+  const anoAtual = new Date().getFullYear();
+  const usadas = await Promise.all(
+    [RegistroAula, Atividade].map((m: mongoose.Model<any>) =>
+      m.aggregate([{ $match: { usuario: { $in: ids }, anoLetivo: anoAtual } }, { $group: { _id: { u: "$usuario", a: "$ano" }, n: { $sum: 1 } } }])
+    )
+  );
+  const res = new Map<string, string[]>();
+  for (const x of usadas.flat() as Array<{ _id: { u: unknown; a: string } }>) {
+    const u = String(x._id.u);
+    if (planos.some((p) => String(p.usuario) === u && p.ano === x._id.a && p.anoLetivo === anoAtual)) continue;
+    const l = res.get(u) ?? [];
+    if (!l.includes(x._id.a)) l.push(x._id.a);
+    res.set(u, l);
+  }
+  return res;
+}
+const SELECT_PLANO = "usuario ano anoLetivo turma uf tipoPeriodo arquivos periodos.numero periodos.itens.codigo updatedAt";
+
 // GET /api/admin/usuarios?q= -> lista com plano, uso de I.A e quanto cada um usou
 export async function usuarios(req: Request, res: Response) {
   const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
   const filtro = q ? { $or: [{ nome: { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } }, { email: { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } }] } : {};
-  const lista = await Usuario.find(filtro).select("nome email createdAt diario.conectadoEm diario.token creditosCentavos").sort({ createdAt: -1 }).limit(300).lean();
+  const lista = await Usuario.find(filtro).select("nome email createdAt diario diarioCpf diarioPedido creditosCentavos").sort({ createdAt: -1 }).limit(300).lean();
   const ids = lista.map((u) => u._id);
-  const [aulas, ativs, planos, correcoes] = await Promise.all([contarPor(RegistroAula, ids), contarPor(Atividade, ids), contarPor(PlanoCurso, ids), contarPor(Correcao, ids)]);
+  const [aulas, ativs, planos, correcoes, listaPlanos, enviadas] = await Promise.all([
+    contarPor(RegistroAula, ids),
+    contarPor(Atividade, ids),
+    contarPor(PlanoCurso, ids),
+    contarPor(Correcao, ids),
+    PlanoCurso.find({ usuario: { $in: ids } }).select(SELECT_PLANO).lean(),
+    RegistroAula.aggregate([{ $match: { usuario: { $in: ids }, diarioEnviadoEm: { $ne: null } } }, { $group: { _id: "$usuario", n: { $sum: 1 }, ultimo: { $max: "$diarioEnviadoEm" } } }]),
+  ]);
+  const semPlano = await seriesSemPlano(ids, listaPlanos as never);
+  const enviadasPor = new Map(enviadas.map((x: { _id: unknown; n: number; ultimo: Date }) => [String(x._id), x]));
   const linhas = await Promise.all(
     lista.map(async (u) => {
       const id = String(u._id);
@@ -56,7 +97,11 @@ export async function usuarios(req: Request, res: Response) {
         atividades: ativs.get(id)?.n ?? 0,
         correcoes: correcoes.get(id)?.n ?? 0,
         planosCurso: planos.get(id)?.n ?? 0,
-        devConectado: !!u.diario?.token,
+        dev: situacaoDev(u as DevUsuario),
+        aulasNoDev: enviadasPor.get(id)?.n ?? 0,
+        ultimaNoDev: enviadasPor.get(id)?.ultimo ?? null,
+        planosComAlerta: listaPlanos.filter((p) => String(p.usuario) === id && conferirPlano(p as never).length > 0).length,
+        seriesSemPlano: semPlano.get(id) ?? [],
         ultimoUso: ultimos.length ? new Date(Math.max(...ultimos)) : null,
       };
     })
@@ -69,7 +114,7 @@ export async function usuarios(req: Request, res: Response) {
 export async function usuario(req: Request, res: Response) {
   if (!ehId(req.params.id)) return res.status(400).json({ message: "Id inválido" });
   const id = req.params.id;
-  const u = await Usuario.findById(id).select("nome email createdAt testeAte testeAulas testeAtividades creditosCentavos diario.nome diario.escolas diario.conectadoEm diario.token").lean();
+  const u = await Usuario.findById(id).select("nome email createdAt testeAte testeAulas testeAtividades creditosCentavos diario diarioCpf diarioPedido").lean();
   if (!u) return res.status(404).json({ message: "Professor não encontrado" });
   const [situacao, assinatura, usos, aulas, atividades, planos] = await Promise.all([
     situacaoDoUsuario(id).catch(() => null),
@@ -77,8 +122,26 @@ export async function usuario(req: Request, res: Response) {
     UsoMensal.find({ usuario: id }).sort({ updatedAt: -1 }).limit(12).lean(),
     RegistroAula.find({ usuario: id }).sort({ createdAt: -1 }).limit(60).select("data turma ano uf anoLetivo periodo entrada textoFinal itens diarioEnviadoEm createdAt").lean(),
     Atividade.find({ usuario: id }).sort({ createdAt: -1 }).limit(60).select("titulo componente ano anoLetivo periodo turma detalhes origem semNota valorTotal habilidades createdAt questoes.tipo").lean(),
-    PlanoCurso.find({ usuario: id }).sort({ anoLetivo: -1, ano: 1 }).select("ano anoLetivo turma tipoPeriodo periodos.numero periodos.itens.codigo updatedAt").lean(),
+    PlanoCurso.find({ usuario: id }).sort({ anoLetivo: -1, ano: 1 }).select(SELECT_PLANO).lean(),
   ]);
+  const [semPlano, enviadas] = await Promise.all([
+    seriesSemPlano([new mongoose.Types.ObjectId(id)], planos as never),
+    RegistroAula.aggregate([{ $match: { usuario: new mongoose.Types.ObjectId(id), diarioEnviadoEm: { $ne: null } } }, { $group: { _id: null, n: { $sum: 1 }, ultimo: { $max: "$diarioEnviadoEm" } } }]),
+  ]);
+  // D.E.V: confere AGORA com o D.E.V se a conexao funciona (so leitura: lista as turmas)
+  const sit = situacaoDev(u as DevUsuario);
+  let devAoVivo: { ok: boolean; mensagem: string; turmas?: number } | null = null;
+  if (u.diario?.token) {
+    try {
+      const r = await diario.turmas(u.diario.token, String(new Date().getFullYear()));
+      devAoVivo = { ok: true, mensagem: `Confirmado agora com o D.E.V (${r.turmas.length} turma(s) em ${new Date().getFullYear()}).`, turmas: r.turmas.length };
+    } catch (e) {
+      devAoVivo = {
+        ok: false,
+        mensagem: e instanceof ErroDiario && e.dados?.vinculoInvalido ? "O D.E.V recusou a conexão (professor inativo ou vínculo inválido)." : `Não consegui confirmar com o D.E.V agora: ${e instanceof Error ? e.message : "erro"}`,
+      };
+    }
+  }
   await registrar(req, id);
   res.json({
     usuario: {
@@ -90,11 +153,20 @@ export async function usuario(req: Request, res: Response) {
       testeAulas: u.testeAulas ?? 0,
       testeAtividades: u.testeAtividades ?? 0,
       creditosCentavos: Math.round(u.creditosCentavos ?? 0),
-      dev: u.diario?.token ? { nome: u.diario.nome, escolas: u.diario.escolas, conectadoEm: u.diario.conectadoEm } : null,
+      dev: {
+        situacao: sit,
+        nome: u.diario?.nome ?? null,
+        escolas: u.diario?.escolas ?? [],
+        conectadoEm: u.diario?.conectadoEm ?? null,
+        aoVivo: devAoVivo,
+        aulasEnviadas: enviadas[0]?.n ?? 0,
+        ultimaEnviada: enviadas[0]?.ultimo ?? null,
+      },
     },
     situacao,
     assinatura,
     usos: usos.map((x) => ({ mes: x.mes, custoCentavos: Math.round(x.custoCentavos ?? 0), aulas: x.aulas, atividades: x.atividades, correcoes: x.correcoes, chamadas: x.chamadas })),
+    seriesSemPlano: semPlano.get(id) ?? [],
     aulas,
     atividades: atividades.map((a) => ({ ...a, questoes: (a.questoes ?? []).length })),
     planos: planos.map((p) => ({
@@ -103,6 +175,9 @@ export async function usuario(req: Request, res: Response) {
       anoLetivo: p.anoLetivo,
       turma: p.turma,
       tipoPeriodo: p.tipoPeriodo,
+      uf: p.uf,
+      arquivos: p.arquivos ?? [],
+      alertas: conferirPlano(p as never),
       periodos: (p.periodos ?? []).map((x: { numero: number; itens?: Array<{ codigo?: string | null }> }) => ({ numero: x.numero, habilidades: (x.itens ?? []).filter((i) => i.codigo).length })),
       atualizadoEm: (p as { updatedAt?: Date }).updatedAt ?? null,
     })),

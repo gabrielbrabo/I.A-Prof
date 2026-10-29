@@ -14,9 +14,14 @@ export interface LinhaAdmin {
   atividades: number;
   correcoes: number;
   planosCurso: number;
-  devConectado: boolean;
+  dev: SituacaoDev;
+  aulasNoDev: number;
+  ultimaNoDev: string | null;
+  planosComAlerta: number;
+  seriesSemPlano: string[]; // series usadas no ano letivo atual sem plano de curso
   ultimoUso: string | null;
 }
+export type SituacaoDev = "conectado" | "conexao_antiga" | "desconectado" | "pendente" | "nunca";
 export interface AulaAdmin {
   _id: string;
   data: string;
@@ -55,14 +60,33 @@ export interface DetalheAdmin {
     testeAulas: number;
     testeAtividades: number;
     creditosCentavos: number;
-    dev: { nome: string | null; escolas: string[]; conectadoEm: string | null } | null;
+    dev: {
+      situacao: SituacaoDev;
+      nome: string | null;
+      escolas: string[];
+      conectadoEm: string | null;
+      aoVivo: { ok: boolean; mensagem: string; turmas?: number } | null;
+      aulasEnviadas: number;
+      ultimaEnviada: string | null;
+    };
   };
   situacao: { acesso: string; planoNome: string | null; motivo: string | null; uso: { percentual: number } } | null;
   assinatura: { planoId: string; ciclo: string; metodo: string; status: string; periodoFim: string | null; cancelarNoFim: boolean } | null;
   usos: Array<{ mes: string; custoCentavos: number; aulas: number; atividades: number; correcoes: number }>;
   aulas: AulaAdmin[];
   atividades: AtividadeAdmin[];
-  planos: Array<{ _id: string; ano: string; anoLetivo: number; turma: string | null; tipoPeriodo: string; periodos: Array<{ numero: number; habilidades: number }> }>;
+  seriesSemPlano: string[];
+  planos: Array<{
+    _id: string;
+    ano: string;
+    anoLetivo: number;
+    turma: string | null;
+    uf: string | null;
+    tipoPeriodo: string;
+    arquivos: string[];
+    alertas: string[];
+    periodos: Array<{ numero: number; habilidades: number }>;
+  }>;
 }
 
 export const adminApi = {
