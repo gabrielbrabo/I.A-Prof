@@ -37,11 +37,12 @@ const contarPor = async (m: mongoose.Model<any>, ids?: unknown[]) => {
 
 // Situacao do D.E.V igual a do app do professor: conectado = tem token E o D.E.V ligado a conta (diarioCpf)
 type DevUsuario = { diario?: { token?: string | null } | null; diarioCpf?: string | null; diarioPedido?: { id?: string | null; expiraEm?: Date | null } | null };
-export function situacaoDev(u: DevUsuario): "conectado" | "conexao_antiga" | "desconectado" | "pendente" | "nunca" {
+// jaUsou: ja lancou aula/atividade/nota no D.E.V pelo I.A Prof (prova de que ja conectou, mesmo sem diarioCpf)
+export function situacaoDev(u: DevUsuario, jaUsou = false): "conectado" | "conexao_antiga" | "desconectado" | "pendente" | "nunca" {
   if (u.diario?.token && u.diarioCpf) return "conectado";
   if (u.diario?.token) return "conexao_antiga"; // antes da trava de 1 D.E.V por conta: vai pedir para conectar de novo
   if (u.diarioPedido?.id && u.diarioPedido.expiraEm && new Date(u.diarioPedido.expiraEm).getTime() > Date.now()) return "pendente";
-  if (u.diarioCpf) return "desconectado"; // ja conectou antes e hoje esta desconectado
+  if (u.diarioCpf || jaUsou) return "desconectado"; // ja conectou antes (ou ja lancou no D.E.V) e hoje esta desconectado
   return "nunca";
 }
 
@@ -79,6 +80,12 @@ export async function usuarios(req: Request, res: Response) {
     PlanoCurso.find({ usuario: { $in: ids } }).select(SELECT_PLANO).lean(),
     RegistroAula.aggregate([{ $match: { usuario: { $in: ids }, diarioEnviadoEm: { $ne: null } } }, { $group: { _id: "$usuario", n: { $sum: 1 }, ultimo: { $max: "$diarioEnviadoEm" } } }]),
   ]);
+  const [ativsDev, notasDev] = await Promise.all([
+    Atividade.aggregate([{ $match: { usuario: { $in: ids }, "diario.enviadoEm": { $ne: null } } }, { $group: { _id: "$usuario", n: { $sum: 1 }, ultimo: { $max: "$diario.enviadoEm" } } }]),
+    Correcao.aggregate([{ $match: { usuario: { $in: ids }, enviadaDiarioEm: { $ne: null } } }, { $group: { _id: "$usuario", n: { $sum: 1 }, ultimo: { $max: "$enviadaDiarioEm" } } }]),
+  ]);
+  const ativsDevPor = new Map(ativsDev.map((x: { _id: unknown; n: number; ultimo: Date }) => [String(x._id), x]));
+  const notasDevPor = new Map(notasDev.map((x: { _id: unknown; n: number; ultimo: Date }) => [String(x._id), x]));
   const semPlano = await seriesSemPlano(ids, listaPlanos as never);
   const enviosLista = await EnvioPlano.find({ usuario: { $in: ids } }).lean();
   const enviadasPor = new Map(enviadas.map((x: { _id: unknown; n: number; ultimo: Date }) => [String(x._id), x]));
@@ -99,9 +106,15 @@ export async function usuarios(req: Request, res: Response) {
         atividades: ativs.get(id)?.n ?? 0,
         correcoes: correcoes.get(id)?.n ?? 0,
         planosCurso: planos.get(id)?.n ?? 0,
-        dev: situacaoDev(u as DevUsuario),
+        dev: situacaoDev(u as DevUsuario, !!(enviadasPor.get(id) || ativsDevPor.get(id) || notasDevPor.get(id) || u.diario?.conectadoEm)),
         aulasNoDev: enviadasPor.get(id)?.n ?? 0,
-        ultimaNoDev: enviadasPor.get(id)?.ultimo ?? null,
+        atividadesNoDev: ativsDevPor.get(id)?.n ?? 0,
+        notasNoDev: notasDevPor.get(id)?.n ?? 0,
+        ultimaNoDev:
+          [enviadasPor.get(id)?.ultimo, ativsDevPor.get(id)?.ultimo, notasDevPor.get(id)?.ultimo]
+            .filter(Boolean)
+            .map((d) => new Date(d as Date))
+            .sort((a, b) => b.getTime() - a.getTime())[0] ?? null,
         planosComAlerta: listaPlanos.filter((p) => {
           if (String(p.usuario) !== id) return false;
           const meus = enviosLista.filter((e) => String(e.usuario) === id) as unknown as EnvioRegistro[];
@@ -120,7 +133,7 @@ export async function usuarios(req: Request, res: Response) {
 export async function usuario(req: Request, res: Response) {
   if (!ehId(req.params.id)) return res.status(400).json({ message: "Id inválido" });
   const id = req.params.id;
-  const u = await Usuario.findById(id).select("nome email createdAt testeAte testeAulas testeAtividades creditosCentavos diario diarioCpf diarioPedido").lean();
+  const u = await Usuario.findById(id).select("nome email createdAt testeAte testeAulas testeAtividades creditosCentavos diario diarioCpf diarioPedido diarioSaiu").lean();
   if (!u) return res.status(404).json({ message: "Professor não encontrado" });
   const [situacao, assinatura, usos, aulas, atividades, planos] = await Promise.all([
     situacaoDoUsuario(id).catch(() => null),
@@ -136,7 +149,21 @@ export async function usuario(req: Request, res: Response) {
     EnvioPlano.find({ usuario: id }).sort({ createdAt: -1 }).limit(100).lean(),
   ]);
   // D.E.V: confere AGORA com o D.E.V se a conexao funciona (so leitura: lista as turmas)
-  const sit = situacaoDev(u as DevUsuario);
+  const [ativsDev, notasDev] = await Promise.all([
+    Atividade.aggregate([{ $match: { usuario: new mongoose.Types.ObjectId(id), "diario.enviadoEm": { $ne: null } } }, { $group: { _id: null, n: { $sum: 1 }, ultimo: { $max: "$diario.enviadoEm" } } }]),
+    Correcao.aggregate([{ $match: { usuario: new mongoose.Types.ObjectId(id), enviadaDiarioEm: { $ne: null } } }, { $group: { _id: null, n: { $sum: 1 }, ultimo: { $max: "$enviadaDiarioEm" } } }]),
+  ]);
+  const jaUsou = !!(enviadas[0]?.n || ativsDev[0]?.n || notasDev[0]?.n || u.diario?.conectadoEm);
+  const sit = situacaoDev(u as DevUsuario, jaUsou);
+  // por que esta desconectado (para o suporte explicar ao professor)
+  const motivoDev =
+    sit === "desconectado"
+      ? (u as { diarioSaiu?: boolean }).diarioSaiu
+        ? "Ele mesmo desconectou o D.E.V (botão Desconectar). Se quiser lançar no diário, precisa conectar de novo."
+        : u.diarioCpf
+        ? "A conexão caiu: o D.E.V recusou o vínculo (cadastro inativo/senha trocada). Peça para tocar em “Conectar D.E.V” de novo."
+        : "Conectou antes da trava de 1 D.E.V por conta: essa conexão antiga foi desfeita automaticamente. Peça para tocar em “Conectar D.E.V” de novo (com CPF e senha do D.E.V)."
+      : null;
   let devAoVivo: { ok: boolean; mensagem: string; turmas?: number } | null = null;
   if (u.diario?.token) {
     try {
@@ -168,6 +195,10 @@ export async function usuario(req: Request, res: Response) {
         aoVivo: devAoVivo,
         aulasEnviadas: enviadas[0]?.n ?? 0,
         ultimaEnviada: enviadas[0]?.ultimo ?? null,
+        atividadesEnviadas: ativsDev[0]?.n ?? 0,
+        notasEnviadas: notasDev[0]?.n ?? 0,
+        ultimaAtividade: ativsDev[0]?.ultimo ?? null,
+        motivo: motivoDev,
       },
     },
     situacao,

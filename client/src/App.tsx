@@ -27,6 +27,7 @@ import { Atividade } from "./api/atividades";
 import { reais } from "./api/conta";
 import WhatsAppButton from "./components/WhatsAppButton";
 import Admin from "./components/Admin";
+import AvisoDevCaiu from "./components/AvisoDevCaiu";
 
 const QTD_PERIODOS: Record<TipoPeriodo, number> = { bimestre: 4, trimestre: 3, semestre: 2 };
 
@@ -76,6 +77,8 @@ function Painel() {
   // Conexao com o D.E.V (Diario escolar): botao embaixo do nome do professor
   const [diario, setDiario] = useState<SituacaoDiario | null>(null);
   const [modalDiario, setModalDiario] = useState(false);
+  // conexao com o D.E.V caiu: avisa ao abrir o app (ate conectar de novo)
+  const [avisoDevCaiu, setAvisoDevCaiu] = useState(false);
   // "Como usar" e tour guiado (o tour aparece sozinho na primeira entrada de cada professor)
   const [comoUsar, setComoUsar] = useState(false);
   const [menuAberto, setMenuAberto] = useState(false);
@@ -139,6 +142,7 @@ function Painel() {
         setDiario(s);
         // pedido de conexao esperando aprovacao no D.E.V: ja abre a janela com o contador e as instrucoes
         if (s && !s.conectado && s.pedido) setModalDiario(true);
+        else if (s && s.disponivel && !s.conectado && s.caiu) setAvisoDevCaiu(true);
       })
       .catch(() => setDiario(null));
   }, []);
@@ -833,6 +837,15 @@ function Painel() {
             ir("assinatura");
           }}
           onFechar={() => setSemLimite(null)}
+        />
+      )}
+      {avisoDevCaiu && !diario?.conectado && !modalDiario && (
+        <AvisoDevCaiu
+          onEntendi={() => setAvisoDevCaiu(false)}
+          onConectar={() => {
+            setAvisoDevCaiu(false);
+            setModalDiario(true);
+          }}
         />
       )}
       {modalDiario && diario && <ModalConectarDiario situacao={diario} onFechar={() => setModalDiario(false)} onMudou={setDiario} />}

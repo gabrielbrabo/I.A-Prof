@@ -14,7 +14,7 @@ const DEV: Record<SituacaoDev, { rotulo: string; cor: string; explica: string }>
   conectado: { rotulo: "D.E.V ✓", cor: "bg-emerald-100 text-emerald-800", explica: "Conectado ao D.E.V." },
   conexao_antiga: { rotulo: "D.E.V: reconectar", cor: "bg-amber-100 text-amber-800", explica: "Conexão antiga (antes da trava de 1 D.E.V por conta): o app vai pedir para conectar de novo." },
   pendente: { rotulo: "D.E.V: aguardando aprovar", cor: "bg-sky-100 text-sky-800", explica: "Pediu para conectar e falta aprovar o pedido dentro do D.E.V." },
-  desconectado: { rotulo: "D.E.V desconectado", cor: "bg-amber-100 text-amber-800", explica: "Já conectou o D.E.V antes, mas hoje está desconectado (saiu ou o D.E.V recusou o vínculo)." },
+  desconectado: { rotulo: "D.E.V desconectado", cor: "bg-amber-100 text-amber-800", explica: "Já conectou e usou o D.E.V pelo I.A Prof, mas hoje a conta está desconectada." },
   nunca: { rotulo: "sem D.E.V", cor: "bg-slate-100 text-slate-600", explica: "Nunca conectou o D.E.V." },
 };
 
@@ -104,7 +104,11 @@ export default function Admin() {
                 <span>✅ {u.correcoes} correções</span>
                 <span className={u.planosCurso ? "" : "font-semibold text-amber-700"}>📘 {u.planosCurso ? `${u.planosCurso} plano(s) de curso` : "sem plano de curso"}</span>
                 {u.seriesSemPlano.length > 0 && <span className="font-semibold text-amber-700">usa {u.seriesSemPlano.map(nomeSerie).join(", ")} sem plano</span>}
-                {u.aulasNoDev > 0 && <span>📒 {u.aulasNoDev} aulas no D.E.V (última {fmtData(u.ultimaNoDev)})</span>}
+                {u.aulasNoDev + u.atividadesNoDev + u.notasNoDev > 0 && (
+                  <span>
+                    📒 no D.E.V: {u.aulasNoDev} aulas · {u.atividadesNoDev} atividades · {u.notasNoDev} notas (último envio {fmtData(u.ultimaNoDev)})
+                  </span>
+                )}
                 <span>🕒 último uso: {fmtData(u.ultimoUso)}</span>
                 <span>cadastro: {fmtData(u.criadoEm)}</span>
               </div>
@@ -185,13 +189,15 @@ function DetalheUsuario({ id, onVoltar }: { id: string; onVoltar: () => void }) 
               <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${DEV[d.usuario.dev.situacao].cor}`}>{DEV[d.usuario.dev.situacao].rotulo}</span>
             </div>
             <p className="mt-1 text-slate-600">{DEV[d.usuario.dev.situacao].explica}</p>
+            {d.usuario.dev.motivo && <p className="mt-1 rounded-lg bg-amber-50 px-2 py-1.5 text-xs text-amber-900">💡 {d.usuario.dev.motivo}</p>}
             {d.usuario.dev.aoVivo && (
               <p className={`mt-1 font-medium ${d.usuario.dev.aoVivo.ok ? "text-emerald-700" : "text-rose-700"}`}>{d.usuario.dev.aoVivo.ok ? "✓ " : "✗ "}{d.usuario.dev.aoVivo.mensagem}</p>
             )}
             <p className="mt-1 text-xs text-slate-500">
               {d.usuario.dev.nome ? `${d.usuario.dev.nome}${d.usuario.dev.escolas.length ? ` (${d.usuario.dev.escolas.join(", ")})` : ""} · ` : ""}
               {d.usuario.dev.conectadoEm ? `conectou em ${fmtData(d.usuario.dev.conectadoEm)} · ` : ""}
-              {d.usuario.dev.aulasEnviadas} aula(s) enviada(s) ao D.E.V{d.usuario.dev.ultimaEnviada ? ` · última em ${fmtData(d.usuario.dev.ultimaEnviada)}` : ""}
+              Enviados ao D.E.V: {d.usuario.dev.aulasEnviadas} aula(s){d.usuario.dev.ultimaEnviada ? ` (última em ${fmtData(d.usuario.dev.ultimaEnviada)})` : ""} ·{" "}
+              {d.usuario.dev.atividadesEnviadas} atividade(s){d.usuario.dev.ultimaAtividade ? ` (última em ${fmtData(d.usuario.dev.ultimaAtividade)})` : ""} · {d.usuario.dev.notasEnviadas} nota(s)
             </p>
           </div>
 

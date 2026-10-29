@@ -9,6 +9,7 @@ export interface SituacaoDiario {
   nome: string | null;
   escolas: string[];
   pedido?: PedidoConexao | null; // aguardando o professor aprovar dentro do D.E.V
+  caiu?: boolean; // ja usava o D.E.V e a conexao caiu (nao foi ele que desconectou)
 }
 
 // Pedido de conexao: o e-mail da conta do I.A Prof e diferente do D.E.V; o professor aprova no D.E.V em ate 5 minutos

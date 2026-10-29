@@ -30,6 +30,8 @@ const usuarioSchema = new Schema(
     // D.E.V desta conta (hash do CPF do professor no D.E.V). Fica gravado mesmo ao desconectar:
     // cada conta do I.A Prof so conecta o D.E.V do proprio professor, e cada D.E.V so uma conta do I.A Prof.
     diarioCpf: { type: String, default: undefined },
+    // O professor desconectou o D.E.V por conta propria (nao avisa "conexao caiu"). Volta a false ao conectar.
+    diarioSaiu: { type: Boolean, default: false },
     // Pedido de conexao aguardando o professor aprovar dentro do D.E.V (e-mail da conta diferente do D.E.V)
     diarioPedido: {
       id: { type: String, default: null },

@@ -16,6 +16,8 @@ export interface LinhaAdmin {
   planosCurso: number;
   dev: SituacaoDev;
   aulasNoDev: number;
+  atividadesNoDev: number;
+  notasNoDev: number;
   ultimaNoDev: string | null;
   planosComAlerta: number;
   seriesSemPlano: string[]; // series usadas no ano letivo atual sem plano de curso
@@ -68,6 +70,10 @@ export interface DetalheAdmin {
       aoVivo: { ok: boolean; mensagem: string; turmas?: number } | null;
       aulasEnviadas: number;
       ultimaEnviada: string | null;
+      atividadesEnviadas: number;
+      notasEnviadas: number;
+      ultimaAtividade: string | null;
+      motivo: string | null; // por que esta desconectado
     };
   };
   situacao: { acesso: string; planoNome: string | null; motivo: string | null; uso: { percentual: number } } | null;

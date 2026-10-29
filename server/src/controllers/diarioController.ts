@@ -2,6 +2,7 @@ import { createHash } from "crypto";
 import { Request, Response } from "express";
 import { z } from "zod";
 import { Usuario } from "../models/Usuario";
+import { Atividade } from "../models/Atividade";
 import { RegistroAula } from "../models/RegistroAula";
 import { diario, ErroDiario } from "../services/diario";
 import { diarioLigado } from "../config/env";
@@ -44,10 +45,21 @@ const pedidoAberto = (u: { diarioPedido?: { id?: string | null; expiraEm?: Date 
 const SEM_PEDIDO = { id: null, expiraEm: null, cpfHash: null, emailDev: null };
 
 export async function status(req: Request, res: Response) {
-  const u = await Usuario.findById(req.usuarioId).select("diario diarioCpf diarioPedido").lean();
+  const u = await Usuario.findById(req.usuarioId).select("diario diarioCpf diarioPedido diarioSaiu").lean();
   const conectado = !!u?.diario?.token && !!u.diarioCpf;
   if (u?.diario?.token && !u.diarioCpf) await Usuario.updateOne({ _id: req.usuarioId }, { $set: { diario: SEM_CONEXAO } });
+  // Conexao CAIU: ja usou o D.E.V (conectou ou lancou aula/atividade) e hoje esta desconectado sem ter saido por conta propria.
+  // O app avisa para o professor nao lancar achando que vai para o diario.
+  let caiu = false;
+  if (!conectado && !u?.diarioSaiu && !pedidoAberto(u)) {
+    caiu =
+      !!u?.diarioCpf ||
+      !!u?.diario?.token ||
+      !!(await RegistroAula.exists({ usuario: req.usuarioId, diarioEnviadoEm: { $ne: null } })) ||
+      !!(await Atividade.exists({ usuario: req.usuarioId, "diario.enviadoEm": { $ne: null } }));
+  }
   res.json({
+    caiu,
     disponivel: diarioLigado(),
     conectado,
     nome: u?.diario?.nome ?? null,
@@ -78,7 +90,7 @@ export async function conectar(req: Request, res: Response) {
       await Usuario.updateOne({ _id: req.usuarioId }, { $set: { diarioPedido: { id: r.pedido.id, expiraEm, cpfHash: h, emailDev: r.emailDev || null } } });
       return res.json({ conectado: false, pendente: true, pedido: { id: r.pedido.id, expiraEm: expiraEm.toISOString(), agora: new Date().toISOString(), emailDev: r.emailDev || "" }, nomeDev: r.nome });
     }
-    await Usuario.updateOne({ _id: req.usuarioId }, { $set: { diarioCpf: h, diarioPedido: SEM_PEDIDO, diario: { token: r.token, nome: r.nome, escolas: r.escolas ?? [], conectadoEm: new Date() } } });
+    await Usuario.updateOne({ _id: req.usuarioId }, { $set: { diarioCpf: h, diarioSaiu: false, diarioPedido: SEM_PEDIDO, diario: { token: r.token, nome: r.nome, escolas: r.escolas ?? [], conectadoEm: new Date() } } });
     res.json({ conectado: true, nome: r.nome, escolas: r.escolas ?? [] });
   } catch (e) {
     // duas contas tentando o mesmo D.E.V ao mesmo tempo: o indice unico barra a segunda
@@ -102,7 +114,7 @@ export async function situacaoPedido(req: Request, res: Response) {
       if (await Usuario.exists({ diarioCpf: h, _id: { $ne: req.usuarioId } })) return res.status(409).json({ status: "erro", message: "Este D.E.V já está conectado a outra conta do I.A Prof." });
       await Usuario.updateOne(
         { _id: req.usuarioId },
-        { $set: { diarioCpf: h, diarioPedido: SEM_PEDIDO, diario: { token: r.token, nome: r.nome ?? null, escolas: r.escolas ?? [], conectadoEm: new Date() } } }
+        { $set: { diarioCpf: h, diarioSaiu: false, diarioPedido: SEM_PEDIDO, diario: { token: r.token, nome: r.nome ?? null, escolas: r.escolas ?? [], conectadoEm: new Date() } } }
       );
       return res.json({ status: "conectado", nome: r.nome ?? null, escolas: r.escolas ?? [] });
     }
@@ -130,7 +142,7 @@ export async function cancelarPedido(req: Request, res: Response) {
 
 // DELETE /api/diario/conectar
 export async function desconectar(req: Request, res: Response) {
-  await Usuario.updateOne({ _id: req.usuarioId }, { $set: { diario: { token: null, nome: null, escolas: [], conectadoEm: null } } });
+  await Usuario.updateOne({ _id: req.usuarioId }, { $set: { diarioSaiu: true, diario: { token: null, nome: null, escolas: [], conectadoEm: null } } });
   res.json({ conectado: false });
 }
 
