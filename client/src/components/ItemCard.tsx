@@ -9,6 +9,7 @@ interface Props {
   habilidadesPeriodo: Array<Opcao & { componente: string }>; // todas do plano do periodo escolhido
   habilidadesOutros?: Array<Opcao & { componente: string; periodo: number }>; // outros periodos: so escolha manual
   nomePeriodo?: string; // "trimestre", "bimestre"...
+  objetoDe?: ((codigo: string) => string | null) | null; // objeto de conhecimento (quando a opcao esta ligada)
   onChange: (item: ItemRegistro) => void;
   onRemove: () => void;
 }
@@ -22,7 +23,7 @@ const sem = (t: string) =>
     .replace(/[̀-ͯ]/g, "");
 
 // Card de um componente da aula: professor ajusta o conteudo e as habilidades (1 a 5, do plano do periodo)
-export default function ItemCard({ item, habilidadesPeriodo, habilidadesOutros = [], nomePeriodo = "período", onChange, onRemove }: Props) {
+export default function ItemCard({ item, habilidadesPeriodo, habilidadesOutros = [], nomePeriodo = "período", objetoDe, onChange, onRemove }: Props) {
   const [busca, setBusca] = useState("");
   const [resultados, setResultados] = useState<Opcao[] | null>(null);
   const [verOutros, setVerOutros] = useState(false); // mostrar habilidades de outros periodos (escolha manual)
@@ -134,6 +135,11 @@ export default function ItemCard({ item, habilidadesPeriodo, habilidadesOutros =
                 {h.fonte === "RECOMPOSIÇÃO" && <span className="ml-1 text-violet-700">(recomposição)</span>}
                 {outro && <span className="ml-1 font-medium text-indigo-700">— do {outro}º {nomePeriodo} (escolhida por você)</span>}
                 {fora && <span className="ml-1 font-semibold text-rose-700">— não está no plano de curso: troque ou remova</span>}
+                {objetoDe?.(h.codigo) && (
+                  <span className="mt-1 block text-[11px] text-emerald-800">
+                    <b>Objeto de conhecimento:</b> {objetoDe(h.codigo)}
+                  </span>
+                )}
               </span>
               <button onClick={() => remover(h.codigo)} className="shrink-0 text-slate-400 hover:text-rose-600" title="Tirar">
                 ✕

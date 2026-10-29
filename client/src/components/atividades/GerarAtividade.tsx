@@ -10,6 +10,8 @@ import { gravarPref, lerPref } from "../../lib/prefs";
 import { divisaoAtual, Divisao } from "../../lib/divisao";
 import SeletorDivisao from "../SeletorDivisao";
 import CampoUf from "../CampoUf";
+import ToggleObjeto from "../ToggleObjeto";
+import { useMostrarObjeto, useObjetos } from "../../lib/objetos";
 import { ErroApi } from "../../lib/sessao";
 import EditorAtividade, { escolherImagens, problemasGabarito } from "./EditorAtividade";
 import { baixarPdf, htmlDaAtividade, imprimirAtividade, imprimirGabarito } from "./impressao";
@@ -319,6 +321,14 @@ function GerarAtividadeTela({
   const habilidadesDisp = componente.trim() ? itensPeriodo.filter((i) => mesmoComponente(i.componente, componente)) : [];
   const codigosDisp = habilidadesDisp.map((h) => h.codigo!);
   const habEscolhidas = habSel.filter((c) => codigosDisp.includes(c));
+  // Objeto de conhecimento junto de cada habilidade (opcao ligada em Configuracoes/aqui)
+  const [mostrarObjeto] = useMostrarObjeto();
+  const objetoDe = useObjetos(
+    codigosDisp,
+    /^[A-Z]{2}$/.test(uf) ? uf : null,
+    Object.fromEntries(habilidadesDisp.filter((h) => h.conteudo).map((h) => [h.codigo!.toUpperCase(), h.conteudo])),
+    mostrarObjeto
+  );
 
   // turma do D.E.V: materias do professor e periodos (abertos/fechados, total de pontos)
   useEffect(() => {
@@ -921,6 +931,7 @@ function GerarAtividadeTela({
           <p className="text-sm font-semibold text-slate-700">
             Habilidades da atividade {habilidadesDisp.length > 0 && <span className="text-rose-600">*</span>}
           </p>
+          <ToggleObjeto className="ml-auto" />
           {habilidadesDisp.length > 1 && (
             <button
               type="button"
@@ -971,6 +982,11 @@ function GerarAtividadeTela({
                     />
                     <span className="min-w-0 text-slate-700">
                       <b className="text-indigo-700">{h.codigo}</b> {h.habilidade}
+                      {mostrarObjeto && objetoDe(h.codigo!) && (
+                        <span className="mt-0.5 block text-xs text-emerald-800">
+                          <b>Objeto de conhecimento:</b> {objetoDe(h.codigo!)}
+                        </span>
+                      )}
                     </span>
                   </label>
                 </li>

@@ -110,6 +110,7 @@ router.post(
 
 router.get("/habilidades/componentes", h(hab.getComponentes));
 router.get("/habilidades/ufs", h(hab.getUfs));
+router.get("/habilidades/objetos", h(hab.getObjetos));
 router.get("/habilidades", h(hab.getHabilidades));
 
 router.post("/registro-aula/gerar", h(reg.gerar));

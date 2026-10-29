@@ -3,6 +3,7 @@ import { SituacaoDiario } from "../api/diario";
 import { ANOS, UFS } from "../lib/formatarRegistro";
 import { gravarPref, lerPref } from "../lib/prefs";
 import { divisaoAtual, divisaoDaUf, Divisao } from "../lib/divisao";
+import { gravarMostrarObjeto, lerMostrarObjeto } from "../lib/objetos";
 
 // Configuracoes do professor (ficam salvas neste aparelho, por conta):
 // nome no diario, serie principal, estado (UF) e tamanho do texto do diario.
@@ -18,6 +19,7 @@ export interface DadosConfig {
   ano: string;
   uf: string;
   divisao: Divisao;
+  mostrarObjeto: boolean;
   limiteSaida: string;
 }
 export const lerConfig = (nomePadrao = ""): DadosConfig => ({
@@ -25,6 +27,7 @@ export const lerConfig = (nomePadrao = ""): DadosConfig => ({
   ano: lerPref("ano", ""),
   uf: lerPref("uf", ""),
   divisao: divisaoAtual(),
+  mostrarObjeto: lerMostrarObjeto(),
   limiteSaida: lerPref("limiteSaida", "") || String(LIMITE_PADRAO),
 });
 export const configCompleta = () => !!lerPref("ano", "") && !!lerPref("uf", "");
@@ -33,6 +36,7 @@ function gravarConfig(c: DadosConfig) {
   if (c.ano) gravarPref("ano", c.ano);
   if (c.uf) gravarPref("uf", c.uf);
   gravarPref("divisao", c.divisao);
+  gravarMostrarObjeto(c.mostrarObjeto);
   gravarPref("limiteSaida", c.limiteSaida);
 }
 
@@ -98,6 +102,20 @@ function CamposConfig({
               <span className="mt-1 block text-xs font-normal text-slate-500">
                 Preenchida pelo seu estado (rede estadual). Se a sua escola usa outra divisão (ex.: escola municipal), troque aqui. Quando você cadastrar o seu
                 plano de curso, vale a divisão dele.
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-emerald-600"
+                checked={valor.mostrarObjeto}
+                onChange={(e) => set({ mostrarObjeto: e.target.checked })}
+              />
+              <span className="text-sm font-medium text-slate-700">
+                Mostrar o objeto de conhecimento
+                <span className="mt-0.5 block text-xs font-normal text-slate-500">
+                  Aparece junto de cada habilidade nos cards de Gerar aula e na escolha das habilidades em Atividades (vem do seu plano de curso ou da BNCC).
+                </span>
               </span>
             </label>
           </div>

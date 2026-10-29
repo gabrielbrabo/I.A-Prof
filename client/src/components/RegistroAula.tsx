@@ -14,6 +14,8 @@ import { lerPref, gravarPref, chaveDoUsuario, ufParaApi } from "../lib/prefs";
 import { divisaoAtual, Divisao } from "../lib/divisao";
 import SeletorDivisao from "./SeletorDivisao";
 import CampoUf from "./CampoUf";
+import ToggleObjeto from "./ToggleObjeto";
+import { useMostrarObjeto, useObjetos } from "../lib/objetos";
 
 const hoje = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD no fuso local
 
@@ -335,6 +337,19 @@ export default function RegistroAula({
 
 
   const periodosDisponiveis = (plano?.periodos ?? []).filter((x) => x.itens.some((i) => i.codigo));
+  // Objeto de conhecimento nos cards: o do plano (texto do professor) ou o da base (BNCC/estado)
+  const [mostrarObjeto] = useMostrarObjeto();
+  const objetosDoPlano = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const p of plano?.periodos ?? []) for (const i of p.itens) if (i.codigo && i.conteudo && !m[i.codigo.toUpperCase()]) m[i.codigo.toUpperCase()] = i.conteudo;
+    return m;
+  }, [plano]);
+  const objetoDe = useObjetos(
+    (itens ?? []).flatMap((it) => it.habilidades.map((h) => h.codigo)),
+    ufParaApi(uf),
+    objetosDoPlano,
+    mostrarObjeto
+  );
   const nomePeriodo = plano ? plano.tipoPeriodo.charAt(0).toUpperCase() + plano.tipoPeriodo.slice(1) : "";
   // Habilidades do periodo escolhido (usadas na troca/busca manual dentro de cada item)
   const habilidadesPeriodo: Array<Opcao & { componente: string }> = useMemo(
@@ -918,10 +933,13 @@ export default function RegistroAula({
 
       {itens && (itens.length > 0 || abertura.length > 0) && (
         <>
-          <p className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">3</span>
-            Confira e salve
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">3</span>
+              Confira e salve
+            </p>
+            <ToggleObjeto />
+          </div>
           {/* Momentos sem componente: Acolhida, Rotina diaria... (entram no inicio do texto) */}
           <div className="rounded-xl border border-slate-200 bg-white p-4" data-tour="aula-momentos">
             <label className="text-xs font-semibold text-slate-600">Momentos da aula (sem habilidade) — um por linha</label>
@@ -946,6 +964,7 @@ export default function RegistroAula({
                 habilidadesPeriodo={habilidadesPeriodo}
                 habilidadesOutros={habilidadesOutros}
                 nomePeriodo={plano?.tipoPeriodo ?? "período"}
+                objetoDe={mostrarObjeto ? objetoDe : null}
                 onChange={(novo) => setItens((l) => l!.map((x, i) => (i === idx ? novo : x)))}
                 onRemove={() => setItens((l) => l!.filter((_, i) => i !== idx))}
               />
