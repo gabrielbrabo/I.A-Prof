@@ -1,6 +1,7 @@
 export interface HabilidadeFormatavel {
   codigo: string;
   habilidade?: string | null;
+  objeto?: string | null; // objeto de conhecimento (so quando o professor liga "incluir no texto do diario")
 }
 
 export interface ItemFormatavel {
@@ -31,7 +32,12 @@ function montar(itens: ItemFormatavel[], semDescricao: Set<string>, abertura?: s
   const corpo = itens
     .map((i, idx) => {
       const habs = (i.habilidades ?? [])
-        .map((h, j) => (semDescricao.has(`${idx}:${j}`) || !h.habilidade ? `-(${h.codigo})` : `-(${h.codigo}) ${h.habilidade.trim()}`))
+        .map((h, j) => {
+          if (semDescricao.has(`${idx}:${j}`)) return `-(${h.codigo})`; // compactado para caber: so o codigo
+          const desc = h.habilidade?.trim() ? ` ${h.habilidade.trim()}` : "";
+          const obj = h.objeto?.trim() ? ` (Objeto de conhecimento: ${h.objeto.trim().replace(/[.;]+$/, "")})` : "";
+          return `-(${h.codigo})${desc}${obj}`;
+        })
         .join(" ");
       const materia = i.componente.toLocaleUpperCase("pt-BR"); // nome da materia sempre em MAIUSCULAS
       return habs ? `${materia}: ${i.conteudo.trim()} ${habs}` : `${materia}: ${i.conteudo.trim()}`;
@@ -49,7 +55,7 @@ export function formatarComLimite(itens: ItemFormatavel[], limite?: number | nul
   if (!limite || limite <= 0 || texto.length <= limite) return { texto, compactado: false, excede: false };
 
   const ordem = itens
-    .flatMap((i, idx) => (i.habilidades ?? []).map((h, j) => ({ chave: `${idx}:${j}`, tam: h.habilidade?.length ?? 0 })))
+    .flatMap((i, idx) => (i.habilidades ?? []).map((h, j) => ({ chave: `${idx}:${j}`, tam: (h.habilidade?.length ?? 0) + (h.objeto?.length ?? 0) })))
     .filter((x) => x.tam > 0)
     .sort((a, b) => b.tam - a.tam);
 

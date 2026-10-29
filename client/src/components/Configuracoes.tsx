@@ -3,7 +3,7 @@ import { SituacaoDiario } from "../api/diario";
 import { ANOS, UFS } from "../lib/formatarRegistro";
 import { gravarPref, lerPref } from "../lib/prefs";
 import { divisaoAtual, divisaoDaUf, Divisao } from "../lib/divisao";
-import { gravarMostrarObjeto, lerMostrarObjeto } from "../lib/objetos";
+import { gravarMostrarObjeto, gravarObjetoNoTexto, lerMostrarObjeto, lerObjetoNoTexto } from "../lib/objetos";
 
 // Configuracoes do professor (ficam salvas neste aparelho, por conta):
 // nome no diario, serie principal, estado (UF) e tamanho do texto do diario.
@@ -20,6 +20,7 @@ export interface DadosConfig {
   uf: string;
   divisao: Divisao;
   mostrarObjeto: boolean;
+  objetoNoTexto: boolean;
   limiteSaida: string;
 }
 export const lerConfig = (nomePadrao = ""): DadosConfig => ({
@@ -28,6 +29,7 @@ export const lerConfig = (nomePadrao = ""): DadosConfig => ({
   uf: lerPref("uf", ""),
   divisao: divisaoAtual(),
   mostrarObjeto: lerMostrarObjeto(),
+  objetoNoTexto: lerObjetoNoTexto(),
   limiteSaida: lerPref("limiteSaida", "") || String(LIMITE_PADRAO),
 });
 export const configCompleta = () => !!lerPref("ano", "") && !!lerPref("uf", "");
@@ -37,6 +39,7 @@ function gravarConfig(c: DadosConfig) {
   if (c.uf) gravarPref("uf", c.uf);
   gravarPref("divisao", c.divisao);
   gravarMostrarObjeto(c.mostrarObjeto);
+  gravarObjetoNoTexto(c.objetoNoTexto);
   gravarPref("limiteSaida", c.limiteSaida);
 }
 
@@ -115,6 +118,21 @@ function CamposConfig({
                 Mostrar o objeto de conhecimento
                 <span className="mt-0.5 block text-xs font-normal text-slate-500">
                   Aparece junto de cada habilidade nos cards de Gerar aula e na escolha das habilidades em Atividades (vem do seu plano de curso ou da BNCC).
+                </span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:col-span-2">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 accent-emerald-600"
+                checked={valor.objetoNoTexto}
+                onChange={(e) => set({ objetoNoTexto: e.target.checked })}
+              />
+              <span className="text-sm font-medium text-slate-700">
+                Incluir o objeto de conhecimento no texto do diário
+                <span className="mt-0.5 block text-xs font-normal text-slate-500">
+                  Cada habilidade sai no texto assim: -(EF05MA03) Descrição da habilidade (Objeto de conhecimento: …). Deixa o texto maior: se passar do tamanho
+                  máximo, as descrições são encurtadas.
                 </span>
               </span>
             </label>

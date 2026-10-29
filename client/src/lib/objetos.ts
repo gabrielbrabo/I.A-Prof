@@ -20,6 +20,23 @@ export function useMostrarObjeto(): [boolean, (v: boolean) => void] {
   return [v, gravarMostrarObjeto];
 }
 
+// Incluir o objeto no TEXTO DO DIARIO (desligado por padrao): Configuracoes ou Gerar aula
+const EVENTO_TEXTO = "iaprof:objetoNoTexto";
+export const lerObjetoNoTexto = () => lerPref("objetoNoTexto", "0") === "1";
+export function gravarObjetoNoTexto(v: boolean) {
+  gravarPref("objetoNoTexto", v ? "1" : "0");
+  window.dispatchEvent(new CustomEvent(EVENTO_TEXTO, { detail: v }));
+}
+export function useObjetoNoTexto(): [boolean, (v: boolean) => void] {
+  const [v, setV] = useState(lerObjetoNoTexto);
+  useEffect(() => {
+    const ouvir = (e: Event) => setV(!!(e as CustomEvent<boolean>).detail);
+    window.addEventListener(EVENTO_TEXTO, ouvir);
+    return () => window.removeEventListener(EVENTO_TEXTO, ouvir);
+  }, []);
+  return [v, gravarObjetoNoTexto];
+}
+
 // cache dos objetos buscados no servidor (codigo -> objeto); "" = nao tem
 const cache = new Map<string, string>();
 

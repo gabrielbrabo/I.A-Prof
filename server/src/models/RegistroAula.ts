@@ -6,7 +6,7 @@ const itemSchema = new Schema(
     componente: { type: String, required: true },
     conteudo: { type: String, required: true },
     habilidades: {
-      type: [{ codigo: { type: String, required: true }, habilidade: { type: String, default: null }, _id: false }],
+      type: [{ codigo: { type: String, required: true }, habilidade: { type: String, default: null }, objeto: { type: String, default: null }, _id: false }],
       default: [],
     },
     conferir: { type: Boolean, default: false }, // palpite da IA ainda nao conferido pelo professor

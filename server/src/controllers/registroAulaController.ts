@@ -74,7 +74,10 @@ const salvarSchema = z.object({
       z.object({
         componente: z.string().min(1),
         conteudo: z.string().min(1),
-        habilidades: z.array(z.object({ codigo: z.string().min(1), habilidade: z.string().nullish() })).max(5, "No máximo 5 habilidades por componente").default([]),
+        habilidades: z
+          .array(z.object({ codigo: z.string().min(1), habilidade: z.string().nullish(), objeto: z.string().max(600).nullish() }))
+          .max(5, "No máximo 5 habilidades por componente")
+          .default([]),
         conferir: z.boolean().optional(), // palpite ainda nao conferido
       })
     )

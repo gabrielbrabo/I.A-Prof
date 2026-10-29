@@ -18,6 +18,7 @@ export interface HabilidadeItem {
   codigo: string;
   habilidade: string;
   fonte: string; // PLANO ou RECOMPOSIÇÃO
+  objeto?: string | null; // objeto de conhecimento (quando vai no texto do diario)
 }
 
 export interface ItemRegistro {
@@ -101,7 +102,7 @@ export type CorpoSalvar = {
   textoManual?: string | null;
   duplicado?: "substituir" | "juntar" | "nova";
   abertura?: string[];
-  itens: Array<{ componente: string; conteudo: string; habilidades: Array<{ codigo: string; habilidade: string }>; conferir?: boolean }>;
+  itens: Array<{ componente: string; conteudo: string; habilidades: Array<{ codigo: string; habilidade: string; objeto?: string | null }>; conferir?: boolean }>;
 };
 
 export const registroApi = {

@@ -15,7 +15,7 @@ import { divisaoAtual, Divisao } from "../lib/divisao";
 import SeletorDivisao from "./SeletorDivisao";
 import CampoUf from "./CampoUf";
 import ToggleObjeto from "./ToggleObjeto";
-import { useMostrarObjeto, useObjetos } from "../lib/objetos";
+import { useMostrarObjeto, useObjetoNoTexto, useObjetos } from "../lib/objetos";
 
 const hoje = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD no fuso local
 
@@ -339,6 +339,7 @@ export default function RegistroAula({
   const periodosDisponiveis = (plano?.periodos ?? []).filter((x) => x.itens.some((i) => i.codigo));
   // Objeto de conhecimento nos cards: o do plano (texto do professor) ou o da base (BNCC/estado)
   const [mostrarObjeto] = useMostrarObjeto();
+  const [objetoNoTexto] = useObjetoNoTexto();
   const objetosDoPlano = useMemo(() => {
     const m: Record<string, string> = {};
     for (const p of plano?.periodos ?? []) for (const i of p.itens) if (i.codigo && i.conteudo && !m[i.codigo.toUpperCase()]) m[i.codigo.toUpperCase()] = i.conteudo;
@@ -348,7 +349,7 @@ export default function RegistroAula({
     (itens ?? []).flatMap((it) => it.habilidades.map((h) => h.codigo)),
     ufParaApi(uf),
     objetosDoPlano,
-    mostrarObjeto
+    mostrarObjeto || objetoNoTexto
   );
   const nomePeriodo = plano ? plano.tipoPeriodo.charAt(0).toUpperCase() + plano.tipoPeriodo.slice(1) : "";
   // Habilidades do periodo escolhido (usadas na troca/busca manual dentro de cada item)
@@ -399,7 +400,15 @@ export default function RegistroAula({
   }, [habilidadesPeriodo]);
 
   const limiteNum = Number(limiteSaida) > 0 ? Number(limiteSaida) : null;
-  const fmt = useMemo(() => (itens ? formatarComLimite(itens, limiteNum, abertura) : null), [itens, limiteNum, abertura]);
+  // muda quando os objetos chegam do servidor (refaz o texto)
+  const chaveObjetos = (itens ?? []).flatMap((i) => i.habilidades.map((h) => objetoDe(h.codigo) ?? "")).join("|");
+  // Com "incluir objeto no texto do diario": cada habilidade leva o objeto de conhecimento para o texto
+  const itensTexto = useMemo(
+    () => itens?.map((it) => ({ ...it, habilidades: it.habilidades.map((h) => ({ ...h, objeto: objetoNoTexto ? objetoDe(h.codigo) : null })) })) ?? null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [itens, objetoNoTexto, chaveObjetos]
+  );
+  const fmt = useMemo(() => (itensTexto ? formatarComLimite(itensTexto, limiteNum, abertura) : null), [itensTexto, limiteNum, abertura]);
   const textoMontado = fmt?.texto ?? "";
   const textoFinal = textoManual ?? textoMontado; // o que vai para o diario
   const excede = textoManual != null ? !!limiteNum && textoManual.length > limiteNum : !!fmt?.excede;
@@ -528,10 +537,10 @@ export default function RegistroAula({
         textoManual: textoManual?.trim() || null,
         duplicado,
         abertura,
-        itens: itens.map(({ componente, conteudo, habilidades, confianca }) => ({
+        itens: (itensTexto ?? itens).map(({ componente, conteudo, habilidades, confianca }) => ({
           componente,
           conteudo,
-          habilidades: habilidades.map(({ codigo, habilidade }) => ({ codigo, habilidade })),
+          habilidades: habilidades.map(({ codigo, habilidade, objeto }) => ({ codigo, habilidade, objeto: objeto ?? null })),
           conferir: confianca === "baixa" && habilidades.length > 0,
         })),
       };
@@ -938,7 +947,10 @@ export default function RegistroAula({
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">3</span>
               Confira e salve
             </p>
-            <ToggleObjeto />
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <ToggleObjeto />
+              <ToggleObjeto noTexto />
+            </div>
           </div>
           {/* Momentos sem componente: Acolhida, Rotina diaria... (entram no inicio do texto) */}
           <div className="rounded-xl border border-slate-200 bg-white p-4" data-tour="aula-momentos">
