@@ -133,13 +133,12 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
   }
 
   // Le o arquivo assim que e escolhido, SEMPRE sem I.A (custo zero), nos dois modos.
-  // Arquivo enviado na opcao errada (ano inteiro x um arquivo de cada periodo): aviso por 7 segundos
+  // Arquivo enviado na opcao errada (ano inteiro x um arquivo de cada periodo): aviso fica ate o professor fechar
   const [modoAviso, setModoAviso] = useState<ModoErrado | null>(null);
-  useEffect(() => {
-    if (!modoAviso) return;
-    const t = window.setTimeout(() => setModoAviso(null), 7000);
-    return () => window.clearTimeout(t);
-  }, [modoAviso]);
+  // Outros avisos do envio (serie errada, periodo errado pelo nome do arquivo, mesmo arquivo em dois periodos...)
+  const [avisosEnvio, setAvisosEnvio] = useState<string[]>([]);
+  // Salvar com periodo vazio: pede confirmacao
+  const [confirmarVazios, setConfirmarVazios] = useState<number[] | null>(null);
 
   async function lerArquivos(lista: File[]) {
     if (!tipo || !lista.length || lendo) return;
@@ -148,6 +147,7 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
     setErro(null);
     setAviso(null);
     setModoAviso(null);
+    setAvisosEnvio([]);
     setLendo(true);
     try {
       const r = await planoApi.extrair({
@@ -160,6 +160,7 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
         turma: turma || null,
       });
       if (r.modoErrado) setModoAviso(r.modoErrado);
+      setAvisosEnvio(r.avisos ?? []);
       // Ano todo: substitui todos os periodos. Por periodo: substitui so o escolhido.
       setPeriodos((ps) =>
         ps.map((p) => {
@@ -225,8 +226,15 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
     return () => clearTimeout(t);
   }, [trava]);
 
-  async function salvar() {
+  async function salvar(confirmado = false) {
     if (!tipo || trava > 0) return;
+    // periodo sem habilidades: avisa antes de salvar (plano incompleto ou arquivo no periodo errado)
+    const vazios = periodos.filter((p) => !p.itens.some((i) => i.codigo)).map((p) => p.numero);
+    if (vazios.length && !confirmado) {
+      setConfirmarVazios(vazios);
+      return;
+    }
+    setConfirmarVazios(null);
     // Datas sao opcionais; so nao deixa salvar com inicio depois do fim
     setErro(null);
     setSalvando(true);
@@ -289,7 +297,7 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
   const botaoSalvar = (
     <button
       data-tour="pc-salvar"
-      onClick={salvar}
+      onClick={() => salvar()}
       disabled={salvando || !totalItens || !tipo || trava > 0 || tudoSalvo}
       className={
         tudoSalvo
@@ -391,9 +399,14 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
             <p className="mb-3 text-xs text-slate-500">PDF com texto, Word (.docx), Excel (.xlsx), CSV ou TXT. As habilidades são lidas direto do documento, sem custo.</p>
             {modoAviso && (
               <div role="alert" className="mb-3 rounded-lg border-2 border-amber-400 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
-                <p>
-                  ⚠️ <b>Confira a opção de envio:</b> {modoAviso.mensagem}
-                </p>
+                <div className="flex items-start justify-between gap-2">
+                  <p>
+                    ⚠️ <b>Confira a opção de envio:</b> {modoAviso.mensagem}
+                  </p>
+                  <button type="button" onClick={() => setModoAviso(null)} aria-label="Fechar aviso" className="shrink-0 rounded px-1.5 text-amber-700 hover:bg-amber-100">
+                    ✕
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={() => {
@@ -514,6 +527,41 @@ export default function PlanoCurso({ onMudou }: { onMudou?: () => void }) {
 
       {erro && <div className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">{erro}</div>}
       {aviso && <div className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{aviso}</div>}
+      {avisosEnvio.length > 0 && (
+        <div role="alert" className="rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-semibold">⚠️ Confira antes de salvar</p>
+            <button type="button" onClick={() => setAvisosEnvio([])} className="shrink-0 rounded-md bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-600">
+              Entendi
+            </button>
+          </div>
+          <ul className="mt-1 list-disc space-y-1 pl-5">
+            {avisosEnvio.map((a) => (
+              <li key={a}>{a}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {confirmarVazios && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <p className="text-base font-bold text-slate-900">⚠️ Plano incompleto</p>
+            <p className="mt-2 text-sm text-slate-700">
+              O {confirmarVazios.map((n) => `${n}º`).join(", ").replace(/, ([^,]*)$/, " e $1")} {nomeTipo.toLowerCase() || tipo} {confirmarVazios.length > 1 ? "estão" : "está"} sem
+              habilidades. Nas aulas desse período, a I.A não terá habilidades do seu plano para usar.
+            </p>
+            <p className="mt-2 text-sm text-slate-600">Se você tem o arquivo desse período, envie antes de salvar. Confira também se não enviou algum arquivo no período errado.</p>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button onClick={() => setConfirmarVazios(null)} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">
+                Voltar e completar
+              </button>
+              <button onClick={() => salvar(true)} className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 ring-1 ring-slate-300 hover:bg-slate-50">
+                Salvar mesmo assim
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {conferencia && (
         <div className={`rounded-lg px-4 py-3 text-sm ${conferencia.fora.length || conferencia.semPeriodo.length ? "bg-rose-50 text-rose-700" : conferencia.avisoPeriodo || conferencia.recuperados.length ? "bg-amber-50 text-amber-900" : "bg-slate-100 text-slate-700"}`}>
           <b>Conferência da leitura:</b> {conferencia.habilidades + conferencia.recomposicao} códigos encontrados no documento ({conferencia.habilidades}{" "}

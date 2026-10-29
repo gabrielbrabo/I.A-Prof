@@ -40,6 +40,7 @@ export interface PlanoCurso {
 
 export interface ResultadoExtracao {
   modoErrado?: ModoErrado | null;
+  avisos?: string[]; // envio entrou, mas o professor precisa conferir (serie errada, periodo errado pelo nome, arquivo repetido...)
   metodo: "sem-ia" | "ia";
   divisaoEncontrada: boolean;
   naoIdentificados: number;

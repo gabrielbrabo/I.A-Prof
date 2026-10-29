@@ -99,7 +99,7 @@ interface PlanoComItens {
   periodos?: Array<{ numero: number; itens?: Array<{ codigo?: string | null; origemTexto?: string | null }> }>;
 }
 // periodo escrito no nome do arquivo: "Plano 2º bimestre.pdf", "1 TRI", "3_trimestre"
-const periodoDoNome = (nome: string) => {
+export const periodoDoNome = (nome: string) => {
   const m = /(?:^|[^0-9])([1-4])\s*(?:º|°|o|ª)?\s*[_\- ]*(bim|tri|sem)/i.exec(nome);
   return m ? Number(m[1]) : null;
 };
@@ -151,4 +151,18 @@ export function comoFoiEnviado(p: PlanoComItens, envios: EnvioRegistro[]) {
   if (ok.length && manuais) alertas.push(`${manuais} habilidade(s) adicionada(s) à mão, além do arquivo.`);
 
   return { forma, porPeriodo, alertas: [...new Set(alertas)] };
+}
+
+// Avisos na hora do envio (para o professor), antes de salvar
+export function serieErradaNoEnvio(codigos: Array<string | null | undefined>, ano: string): string | null {
+  const com = codigos.map((c) => ({ c: c ?? "", s: seriesDoCodigo(c) })).filter((x) => x.s);
+  const fora = com.filter((x) => !x.s!.includes(ano));
+  if (!com.length || fora.length / com.length < 0.3) return null;
+  const cont = new Map<string, number>();
+  for (const x of fora) if (x.s!.length === 1) cont.set(x.s![0], (cont.get(x.s![0]) ?? 0) + 1);
+  const provavel = [...cont].sort((a, b) => b[1] - a[1])[0]?.[0];
+  return `${fora.length} de ${com.length} habilidades deste arquivo são ${provavel ? `do ${nomeAno(provavel)}` : "de outra série"} (ex.: ${fora
+    .slice(0, 3)
+    .map((x) => x.c)
+    .join(", ")}), mas você está cadastrando o plano do ${nomeAno(ano)}. Confira a Série no topo antes de salvar.`;
 }

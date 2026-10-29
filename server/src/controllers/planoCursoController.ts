@@ -5,6 +5,7 @@ import multer from "multer";
 import { z } from "zod";
 import { PlanoCurso } from "../models/PlanoCurso";
 import { EnvioPlano } from "../models/EnvioPlano";
+import { periodoDoNome, serieErradaNoEnvio } from "../services/conferenciaPlano";
 import { EXTENSOES_ACEITAS } from "../services/arquivoParaIA";
 import { Achado, lerArquivoSemIA, montarItens } from "../services/planoSemIA";
 import {
@@ -150,7 +151,30 @@ export async function extrair(req: Request, res: Response) {
       const avisoPeriodo = deOutroPeriodo.length
         ? `O documento também tem habilidades de outro(s) ${nomeUnid}(s) (${periodosDoc.filter((n) => n !== periodoAlvo).map((n) => `${n}º`).join(", ")}). Só entraram as do ${periodoAlvo}º; ${deOutroPeriodo.length} ficaram de fora: ${deOutroPeriodo.join(", ")}.`
         : null;
-      await registrar("ok", [modoErrado?.mensagem, avisoPeriodo].filter(Boolean).join(" ") || null, [{ numero: periodoAlvo, itens }]);
+      // Avisos extras (o envio entra, mas o professor precisa conferir)
+      const avisos: string[] = [];
+      const serieErrada = serieErradaNoEnvio(itens.map((i) => i.codigo), p.data.ano);
+      if (serieErrada) avisos.push(serieErrada);
+      if (!periodosDoc.length) {
+        const nomeDiz = nomes.map(periodoDoNome).find((n) => n != null) ?? null;
+        if (nomeDiz && nomeDiz !== periodoAlvo)
+          avisos.push(`O nome do arquivo indica o ${nomeDiz}º ${tipo}, mas você enviou no ${periodoAlvo}º. Se ele for do ${nomeDiz}º, escolha o ${nomeDiz}º ${tipo} e envie de novo.`);
+        else if (!nomeDiz) avisos.push(`Este arquivo não diz de qual ${tipo} é. Confira se ele é mesmo do ${periodoAlvo}º ${tipo} antes de salvar.`);
+      }
+      const repetido = await EnvioPlano.findOne({
+        usuario: req.usuarioId,
+        ano: p.data.ano,
+        ...(p.data.anoLetivo ? { anoLetivo: p.data.anoLetivo } : {}),
+        modo: "periodo",
+        resultado: "ok",
+        arquivos: { $in: nomes },
+        periodoEscolhido: { $ne: periodoAlvo },
+      })
+        .sort({ createdAt: -1 })
+        .lean();
+      if (repetido)
+        avisos.push(`Este mesmo arquivo já foi enviado no ${repetido.periodoEscolhido}º ${tipo}. Cada ${tipo} precisa do seu próprio plano: confira se não trocou os arquivos.`);
+      await registrar("ok", [modoErrado?.mensagem, avisoPeriodo, ...avisos].filter(Boolean).join(" ") || null, [{ numero: periodoAlvo, itens }]);
       return res.json({
         metodo: "sem-ia",
         versaoLeitura: VERSAO_LEITURA,
@@ -159,6 +183,7 @@ export async function extrair(req: Request, res: Response) {
         semTexto,
         avisoPeriodo,
         modoErrado,
+        avisos,
         recuperados: itens.filter((i) => i.conferir).map((i) => i.codigo),
         ...conferir(capturados, deOutroPeriodo),
         arquivos: nomes,
@@ -187,7 +212,7 @@ export async function extrair(req: Request, res: Response) {
           },
         });
       }
-      const periodos = [];
+      const periodos: Array<{ numero: number; itens: Awaited<ReturnType<typeof montarItens>> }> = [];
       for (let n = 1; n <= qtd; n++) {
         const itens = await montarItens(comPeriodo.filter((x) => x.periodo === n), p.data.uf || null);
         if (itens.length) periodos.push({ numero: n, itens });
@@ -201,9 +226,17 @@ export async function extrair(req: Request, res: Response) {
               mensagem: `Este arquivo parece ter só o ${periodos[0].numero}º ${tipo}. Se você tem um arquivo para cada ${tipo}, escolha "Um arquivo com o plano de cada período" e envie cada arquivo no seu ${tipo}.`,
             }
           : null;
-      await registrar("ok", modoErrado?.mensagem ?? (semPeriodo.length ? `${semPeriodo.length} habilidade(s) sem período indicado no documento ficaram de fora.` : null), periodos);
+      const avisos: string[] = [];
+      const serieErrada = serieErradaNoEnvio(periodos.flatMap((x) => x.itens.map((i) => i.codigo)), p.data.ano);
+      if (serieErrada) avisos.push(serieErrada);
+      const faltam = Array.from({ length: qtd }, (_, i) => i + 1).filter((n) => !periodos.some((x) => x.numero === n));
+      if (faltam.length && periodos.length > 1)
+        avisos.push(`O arquivo não tem habilidades do ${faltam.map((n) => `${n}º`).join(", ").replace(/, ([^,]*)$/, " e $1")} ${tipo}. Confira se enviou o plano completo.`);
+      const semPerMsg = semPeriodo.length ? `${semPeriodo.length} habilidade(s) sem período indicado no documento ficaram de fora.` : null;
+      await registrar("ok", [modoErrado?.mensagem, ...avisos, semPerMsg].filter(Boolean).join(" ") || null, periodos);
       return res.json({
         modoErrado,
+        avisos,
         metodo: "sem-ia",
         versaoLeitura: VERSAO_LEITURA,
         divisaoEncontrada: true,
