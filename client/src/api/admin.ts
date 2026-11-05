@@ -6,6 +6,7 @@ export interface LinhaAdmin {
   id: string;
   nome: string;
   email: string;
+  emailsLigados?: string[]; // outros e-mails do mesmo professor (contas ligadas)
   criadoEm: string | null;
   acesso: "teste" | "assinante" | "bloqueado" | null;
   planoNome: string | null;

@@ -70,8 +70,10 @@ const SELECT_PLANO = "usuario ano anoLetivo turma uf tipoPeriodo arquivos period
 export async function usuarios(req: Request, res: Response) {
   const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
   const filtro = q ? { $or: [{ nome: { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } }, { email: { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } }] } : {};
-  const lista = await Usuario.find(filtro).select("nome email createdAt diario diarioCpf diarioPedido creditosCentavos").sort({ createdAt: -1 }).limit(300).lean();
+  // contas ligadas (mesmo professor, outro e-mail) aparecem dentro da principal, nao como outro professor
+  const lista = await Usuario.find({ ...filtro, contaPrincipal: null }).select("nome email createdAt diario diarioCpf diarioPedido creditosCentavos").sort({ createdAt: -1 }).limit(300).lean();
   const ids = lista.map((u) => u._id);
+  const ligadas = await Usuario.find({ contaPrincipal: { $in: ids } }).select("email contaPrincipal").lean();
   const [aulas, ativs, planos, correcoes, listaPlanos, enviadas] = await Promise.all([
     contarPor(RegistroAula, ids),
     contarPor(Atividade, ids),
@@ -98,6 +100,7 @@ export async function usuarios(req: Request, res: Response) {
         id,
         nome: u.nome,
         email: u.email,
+        emailsLigados: ligadas.filter((x) => String(x.contaPrincipal) === id).map((x) => x.email),
         criadoEm: (u as { createdAt?: Date }).createdAt ?? null,
         acesso: s?.acesso ?? null,
         planoNome: s?.planoNome ?? null,

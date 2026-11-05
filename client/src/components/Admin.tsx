@@ -89,6 +89,7 @@ export default function Admin() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold text-slate-900">{u.nome}</span>
                 <span className="text-xs text-slate-500">{u.email}</span>
+                {!!u.emailsLigados?.length && <span className="text-xs text-slate-500">· também entra com {u.emailsLigados.join(", ")}</span>}
                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${corAcesso(u.acesso)}`}>
                   {u.acesso === "assinante" ? u.planoNome ?? "Assinante" : u.acesso === "teste" ? "Teste" : "Sem acesso"}
                 </span>

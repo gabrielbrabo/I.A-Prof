@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "seed:bncc": "tsx src/scripts/importBncc.ts",
     "import:curriculo": "tsx src/scripts/importCurriculo.ts",
-    "import:planobase": "tsx src/scripts/importPlanoBase.ts"
+    "import:planobase": "tsx src/scripts/importPlanoBase.ts",
+    "mesclar:contas": "tsx src/scripts/mesclarContas.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

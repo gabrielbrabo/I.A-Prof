@@ -4,7 +4,7 @@ import { z } from "zod";
 import { OAuth2Client } from "google-auth-library";
 import { env } from "../config/env";
 import { TESTE } from "../config/planos";
-import { gerarToken } from "../middleware/auth";
+import { gerarToken, contaEfetiva } from "../middleware/auth";
 import { Usuario } from "../models/Usuario";
 import { PlanoCurso } from "../models/PlanoCurso";
 import { RegistroAula } from "../models/RegistroAula";
@@ -42,6 +42,13 @@ export async function cadastro(req: Request, res: Response) {
   res.status(201).json({ token: gerarToken(String(u._id)), usuario: publico(u) });
 }
 
+// Conta ligada a outra (mesmo professor com dois e-mails): entra na conta principal
+async function entrarComo(usuarioId: string) {
+  const id = await contaEfetiva(usuarioId);
+  const u = await Usuario.findById(id).lean();
+  return { token: gerarToken(id), usuario: publico(u!) };
+}
+
 // POST /api/auth/login
 export async function login(req: Request, res: Response) {
   const p = loginSchema.safeParse(req.body);
@@ -49,7 +56,7 @@ export async function login(req: Request, res: Response) {
   const u = await Usuario.findOne({ email: p.data.email.toLowerCase() });
   if (u && !u.senhaHash) return res.status(401).json({ message: "Essa conta foi criada com o Google. Use o botão “Entrar com Google”." });
   if (!u || !(await bcrypt.compare(p.data.senha, u.senhaHash!))) return res.status(401).json({ message: "E-mail ou senha incorretos." });
-  res.json({ token: gerarToken(String(u._id)), usuario: publico(u) });
+  res.json(await entrarComo(String(u._id)));
 }
 
 // GET /api/auth/eu -> dados do professor logado + situacao (teste/plano/uso)
@@ -93,7 +100,7 @@ export async function entrarGoogle(req: Request, res: Response) {
     });
     if (primeiro) await adotarDadosAntigos(u._id);
   }
-  res.json({ token: gerarToken(String(u._id)), usuario: publico(u) });
+  res.json(await entrarComo(String(u._id)));
 }
 
 // GET /api/auth/config -> o client sabe se mostra o botao do Google

@@ -32,6 +32,8 @@ const usuarioSchema = new Schema(
     diarioCpf: { type: String, default: undefined },
     // O professor desconectou o D.E.V por conta propria (nao avisa "conexao caiu"). Volta a false ao conectar.
     diarioSaiu: { type: Boolean, default: false },
+    // Conta LIGADA a outra (mesmo professor com dois e-mails): entrar com esta conta abre a conta principal.
+    contaPrincipal: { type: Schema.Types.ObjectId, ref: "Usuario", default: null, index: true },
     // Pedido de conexao aguardando o professor aprovar dentro do D.E.V (e-mail da conta diferente do D.E.V)
     diarioPedido: {
       id: { type: String, default: null },
